@@ -1,9 +1,12 @@
 [project]
 name = "together"
 version = "0.1.0"
-description = "Add your description here"
+description = "A webapp for relationship activities"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "litestar[standard]>=2.19.0",
+    "litestar[standard,sqlalchemy]>=2.19.0",
+    "apscheduler>=4.0.0a6",
+    "argon2-cffi>=23.1.0",
+    "itsdangerous>=2.0.0",
 ]
