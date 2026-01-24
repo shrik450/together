@@ -11,7 +11,7 @@ The foundation that everything else builds on:
 - Templating (Jinja2 with shared + module template paths)
 - Static file serving
 
-## Layer 2: Framework Features (Implemented)
+## Layer 2: Framework Features
 
 Shared infrastructure that modules depend on:
 
@@ -19,14 +19,14 @@ Shared infrastructure that modules depend on:
   `current_user` dependency, `require_auth` guard
   - Session storage via signed cookies (itsdangerous)
   - Password hashing via Argon2
-  - CLI command for user creation: `uv run python cli.py create-user <username>`
+  - CLI command for user creation: `uv run python -m together create-user <username>`
 - **Scheduler**: APScheduler 4.x AsyncScheduler with SQLite data store
   - Lifespan integration for automatic start/stop
   - `add_schedule()` function for modules to register cron jobs
 - **App Shell**: Responsive layout with sidebar (wide) and breadcrumb bar (narrow)
   - CSS framework with design tokens, dark mode, and component styles
-  - NavItem registration via central NAV_ITEMS list
-  - PageAction and Breadcrumb dataclasses for UI context
+  - `NavNode` registration via `register_nav_node()` during module registration
+  - `PageAction` and `NavNode` dataclasses for UI context (see `docs/ui_design.md`)
 
 Note: Settings is a module concern, not framework. Each module manages its own
 settings table and UI.
@@ -36,8 +36,8 @@ settings table and UI.
 ```
 framework/
 ├── __init__.py
-├── ui.py                   # PageAction, Breadcrumb dataclasses
-├── nav.py                  # NavItem, NAV_ITEMS list
+├── db.py                   # Database config, Base class, register_models()
+├── ui.py                   # PageAction, NavNode dataclasses, register_nav_node()
 ├── auth/
 │   ├── __init__.py         # Module exports
 │   ├── models.py           # User model
@@ -92,8 +92,7 @@ together/
 ├── schema.sql
 ├── framework/
 │   ├── __init__.py
-│   └── db/
-│       └── __init__.py
+│   └── db.py
 ├── modules/
 │   └── __init__.py
 ├── templates/

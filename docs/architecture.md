@@ -83,41 +83,42 @@ actions = [
 ]
 ```
 
-**Breadcrumb** - Represents a breadcrumb navigation item:
+**NavNode** - Represents a navigation node. The app shell uses a unified
+navigation model where handlers provide a `nav_stack` (list of levels, where
+each level is a list of `NavNode`s). See `docs/ui_design.md` for full details.
 
 ```python
-from framework.ui import Breadcrumb
+from framework.ui import NavNode
 
-breadcrumbs = [
-    Breadcrumb(label="Home", href="/"),
-    Breadcrumb(label="Current Page"),  # No href = current page
-]
-```
-
-**NavItem** - Represents a sidebar navigation item (defined centrally):
-
-```python
-from framework.nav import NAV_ITEMS, NavItem
-
-# NAV_ITEMS is a list of NavItem instances
-# Modules don't register nav items; the list is defined in framework/nav.py
+@dataclass
+class NavNode:
+    label: str
+    href: str | None = None   # None = current page
+    icon: str | None = None   # Optional
 ```
 
 Handlers pass these to templates via context:
 
 ```python
-@get("/example")
-async def example_page() -> Template:
+@get("/current-affairs/2026-01-10")
+async def entry_page() -> Template:
     return Template(
-        template_name="example.html",
+        template_name="current_affairs/entry.html",
         context={
-            "breadcrumbs": [Breadcrumb(label="Home", href="/"), Breadcrumb(label="Example")],
+            "nav_stack": [
+                [
+                    NavNode(label="Jan 10"),
+                    NavNode(label="Jan 9", href="/current-affairs/2026-01-09/"),
+                    NavNode(label="Jan 8", href="/current-affairs/2026-01-08/"),
+                ],
+            ],
             "actions": [PageAction(label="Edit", href="/edit")],
-            "page_title": "Example Page",
-            "page_subtitle": "A subtitle for the page",
         },
     )
 ```
+
+The `nav_stack` contains only levels within the module. The shell automatically
+prepends the Home level (`/`) and the module's registered `NavNode`.
 
 ---
 
@@ -146,7 +147,8 @@ together/
 ├── framework/             # Shared infrastructure
 │   ├── __init__.py
 │   ├── auth/              # User auth, sessions
-│   ├── db/                # Database config, model registration
+│   ├── db.py              # Database config, Base class, register_models()
+│   ├── ui.py              # PageAction, NavNode, register_nav_node()
 │   └── scheduler/         # APScheduler setup
 ├── modules/               # Feature modules
 │   ├── __init__.py
@@ -176,7 +178,7 @@ modules/current_affairs/
 
 ## Framework Components
 
-### Database (framework/db/)
+### Database (framework/db.py)
 
 Uses Litestar's `SQLAlchemyPlugin` for session management:
 
@@ -226,13 +228,27 @@ Uses APScheduler 4.x `AsyncScheduler` with lifespan integration:
 Modules are registered explicitly in `app.py`. Each module exports:
 
 - `router`: A `Router` instance to mount on the app
-- `register()`: Function that registers models and schedules
+- `register()`: Function that registers models, schedules, and navigation
 
 Each module's `register()` function:
 
 - Calls `register_models()` with all SQLAlchemy models
 - Calls `add_schedule()` for any scheduled jobs
+- Calls `register_nav_node()` with the module's top-level `NavNode`
 - Raises clear errors if misconfigured
+
+Example:
+
+```python
+from framework.db import register_models
+from framework.scheduler import add_schedule
+from framework.ui import NavNode, register_nav_node
+
+def register():
+    register_models(Entry, Settings)
+    add_schedule("daily-briefing", generate_briefing, cron="0 7 * * *")
+    register_nav_node(NavNode(label="Current Affairs", href="/current-affairs/", icon="newspaper"))
+```
 
 ---
 
@@ -256,15 +272,18 @@ Together uses a shared "app shell" defined by the base template. The shell is
 responsible for global navigation and consistent page chrome; modules render
 their pages into the main content pane.
 
-- **Wide viewports (`min-width: 900px`)**: Persistent left sidebar navigation +
-  a right content pane.
-- **Narrow viewports**: A top breadcrumb bar + the content pane below.
-- **Navigation structure**:
-  - Top-level entries are modules.
-  - Modules may provide hierarchical navigation for their own content (kept
-    bounded; deep browsing lives in module pages, not the global nav).
-  - The breadcrumb bar reflects the current hierarchical context without a
-    dedicated "Home" crumb.
+> **Note:** This section covers the technical/code aspects of the app shell.
+> For UX rationale, visual design, and detailed behavior specifications, see
+> `docs/ui_design.md`.
+
+Navigation state is provided via the `nav_stack` context variable. The shell
+automatically prepends Home (`/`) and the module's registered `NavNode`. See
+`docs/ui_design.md` for the full navigation model specification.
+
+- **Wide viewports (`min-width: 900px`)**: Persistent left sidebar showing all
+  modules, with the active module expanded to show the current path and siblings.
+- **Narrow viewports**: A breadcrumb bar showing the last two levels, with
+  dropdowns for sibling quick-switching.
 - **HTMX-friendly shell**: In-app links should be boostable so navigation can
   swap the content pane without re-rendering the whole shell.
 

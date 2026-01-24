@@ -53,6 +53,11 @@ uv run python <file.py>
 - Do not add comments unless they are necessary to understand _why_ something
   is done. Doc comments should be avoided unless they add value over the
   function/class name, argument names and types.
+- **Immutable collection types**: When returning collections from functions,
+  use `Sequence` or `Mapping` from `collections.abc` instead of `list` or `dict`
+  in type hints. This signals to callers that the returned collection should not
+  be mutated. Internal storage can still use mutable types, but the public API
+  should expose immutable interfaces.
 
 ## Architecture
 

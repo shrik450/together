@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from litestar import Router
+
+from framework import register_template_dirs
 
 from .handlers import index
 
@@ -9,5 +13,4 @@ router = Router(
 
 
 def register() -> None:
-    """Register home module. No models or schedules for now."""
-    pass
+    register_template_dirs(Path(__file__).parent / "templates")

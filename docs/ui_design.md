@@ -141,38 +141,123 @@ In-content interactions (quiz prev/next, accordion expand, link navigation) do
 not go through this mechanism—they are part of the content and styled
 accordingly.
 
-### Breadcrumbs
+### Navigation Model
 
-Handlers pass breadcrumb navigation to templates via the `breadcrumbs` context
-variable:
+Together uses a unified navigation model based on `NavNode`. Instead of separate
+breadcrumb and sidebar nav concepts, handlers provide a single `nav_stack` that
+the shell renders appropriately for each viewport.
+
+**Data structure:**
 
 ```python
-from framework.ui import Breadcrumb
+from framework.ui import NavNode
 
+@dataclass
+class NavNode:
+    label: str
+    href: str | None = None   # None = current page
+    icon: str | None = None   # Optional, any node can have one
+```
+
+**Context variable:**
+
+```python
+nav_stack: list[list[NavNode]]
+```
+
+Each inner list represents a **level** in the hierarchy. The first node in each
+level is the active node at that level; subsequent nodes are siblings available
+for quick-switching.
+
+**Rules:**
+
+1. Each inner list is a **level** in the hierarchy
+2. First node in each level is the **active node**; remaining nodes are
+   **siblings** for quick-switching
+3. The **last level** is implicitly the current page
+4. Handler provides only levels **within the module**
+5. Shell automatically prepends two levels:
+   - Level 0: `[NavNode(label="Home", href="/")]`
+   - Level 1: The module's registered `NavNode` (see `docs/architecture.md`)
+
+**Example - entry page** (`/current-affairs/2026-01-10`):
+
+```python
 @get("/current-affairs/2026-01-10")
 async def entry_page() -> Template:
     return Template(
         template_name="current_affairs/entry.html",
         context={
-            "breadcrumbs": [
-                Breadcrumb(label="Current Affairs", href="/current-affairs/"),
-                Breadcrumb(label="Jan 10"),  # No href = current page
+            "nav_stack": [
+                [
+                    NavNode(label="Jan 10"),
+                    NavNode(label="Jan 9", href="/current-affairs/2026-01-09/"),
+                    NavNode(label="Jan 8", href="/current-affairs/2026-01-08/"),
+                ],
             ],
         },
     )
 ```
 
-On narrow viewports, the breadcrumb bar shows `[Back target] > [Current page]`.
-On wide viewports, breadcrumbs are not displayed (the sidebar serves as the
-primary navigation).
+Full stack after shell prepends:
+
+```
+[
+    [NavNode("Home", "/")],
+    [NavNode("Current Affairs", "/current-affairs/", icon="newspaper")],
+    [NavNode("Jan 10"), NavNode("Jan 9", "..."), NavNode("Jan 8", "...")],
+]
+```
+
+**Example - module index** (`/current-affairs/`):
+
+```python
+@get("/current-affairs/")
+async def index() -> Template:
+    return Template(
+        template_name="current_affairs/index.html",
+        context={"nav_stack": []},
+    )
+```
+
+Full stack: `[[Home, /]], [[Current Affairs]]` → Breadcrumb: `Home > Current Affairs`
+
+**Example - deeper hierarchy** (`/eats/123/visit/456`):
+
+```python
+context={
+    "nav_stack": [
+        [
+            NavNode(label="Katz's Deli", href="/eats/123/"),
+            NavNode(label="Joe's Pizza", href="/eats/456/"),
+        ],
+        [
+            NavNode(label="Visit Jan 5"),
+            NavNode(label="Visit Dec 28", href="/eats/123/visit/123/"),
+        ],
+    ],
+}
+```
+
+**Shell rendering:**
+
+| Viewport | Behavior |
+|----------|----------|
+| **Narrow** | Breadcrumb bar shows only the **last two levels**: `[Back target ▾] > [Current page ▾]`. Tapping a node with siblings opens a dropdown for quick-switching. |
+| **Wide** | Sidebar shows all top-level modules. The active module is expanded, showing the full path with siblings visible at each level. |
 
 ---
 
 ## UI/UX Principles
 
+> **Note:** This section covers UX rationale and design specifications for the
+> app shell. For technical implementation details and code examples, see
+> `docs/architecture.md`.
+
 ### Global App Shell & Navigation
 
-Together has a consistent app shell that wraps every module.
+Together has a consistent app shell that wraps every module. Navigation state is
+provided via the `nav_stack` context variable (see "Navigation Model" above).
 
 - **Layout modes**
   - **Wide viewports (`min-width: 900px`)**: Persistent left sidebar navigation,
@@ -181,13 +266,14 @@ Together has a consistent app shell that wraps every module.
     module content below.
 - **Sidebar navigation (wide)**
   - Functions like a small file tree / accordion.
-  - Top-level items are modules.
-  - When inside a module, that module can expand to show its own hierarchy.
+  - Top-level items are modules (registered via `register_nav_node()`).
+  - When inside a module, that module expands to show the current path with
+    siblings visible at each level (from `nav_stack`).
   - Avoid unbounded lists in the sidebar; use "Recent N" items plus stable entry
-    points (e.g. overview/archive/settings) and let deep browsing happen in the
-    main pane.
+    points and let deep browsing happen in the main pane.
 - **Breadcrumb bar (narrow)**
-  - Shows only the recent hierarchy: `[Back target] > [Current page]`.
+  - Shows only the last two levels: `[Back target ▾] > [Current page ▾]`.
+  - Tapping a node with siblings opens a dropdown for quick-switching.
   - There is no dedicated "Home" crumb; backing out is done via the back target
     (and ultimately browser back).
   - The right side can include the logged-in user avatar/menu.
