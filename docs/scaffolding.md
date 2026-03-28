@@ -2,16 +2,57 @@
 
 This document outlines the scaffolding layers needed to build the app.
 
-## Layer 1: Core App Structure
+## Progress
+
+Last updated: 2026-03-28
+
+| Layer | Status | Summary |
+| --- | --- | --- |
+| Layer 1: Core App Structure | ✅ Complete | All components implemented |
+| Layer 2: Framework Features | 🚧 Partial | App Shell and Auth complete; Scheduler pending |
+| Layer 3: First Module | ❌ Not Started | — |
+
+### Layer 1 Details
+
+| Component | Status |
+| --- | --- |
+| Litestar app entry point | ✅ |
+| Module registration pattern | ✅ |
+| Database setup (SQLAlchemy + SQLite) | ✅ |
+| Templating (Jinja2) | ✅ |
+| Static file serving | ✅ |
+
+### Layer 2 Details
+
+| Component | Status | Notes |
+| --- | --- | --- |
+| **User Auth** | ✅ | Implemented in `framework/auth/` and `together/__main__.py` |
+| ↳ User model | ✅ | `framework/auth/models.py`; schema now comes from Alembic migrations |
+| ↳ Login/logout routes | ✅ | `framework/auth/handlers.py` |
+| ↳ Session middleware | ✅ | `framework/auth/middleware.py` |
+| ↳ `current_user` dependency | ✅ | `framework/auth/dependencies.py` |
+| ↳ `require_auth` guard | ✅ | `framework/auth/guards.py` |
+| ↳ CLI user creation | ✅ | `uv run python -m together create-user <username>` |
+| **Scheduler** | ❌ | |
+| ↳ AsyncScheduler setup | ❌ | APScheduler 4.x is an intentional choice despite still being alpha |
+| ↳ Lifespan integration | ❌ | |
+| ↳ `add_schedule()` function | ❌ | |
+| **App Shell** | ✅ | |
+| ↳ `NavNode` / `PageAction` dataclasses | ✅ | `framework/ui.py` |
+| ↳ `register_nav_node()` | ✅ | `framework/ui.py` |
+| ↳ Responsive layout (sidebar/breadcrumb) | ✅ | `templates/base.html` |
+| ↳ CSS framework | ✅ | `static/style.css` |
+
+## Layer 1: Core App Structure ✅
 
 The foundation that everything else builds on:
 
 - Litestar app entry point with explicit module registration pattern
-- Database setup (SQLAlchemy + SQLite, session factory, Base class)
+- Database setup (Advanced Alchemy + async SQLite, session factory, Base class)
 - Templating (Jinja2 with shared + module template paths)
 - Static file serving
 
-## Layer 2: Framework Features
+## Layer 2: Framework Features 🚧
 
 Shared infrastructure that modules depend on:
 
@@ -23,6 +64,8 @@ Shared infrastructure that modules depend on:
 - **Scheduler**: APScheduler 4.x AsyncScheduler with SQLite data store
   - Lifespan integration for automatic start/stop
   - `add_schedule()` function for modules to register cron jobs
+  - APScheduler 4.x is intentional even though it is still alpha; we prefer its
+    async-native design over the stable 3.x line for this app
 - **App Shell**: Responsive layout with sidebar (wide) and breadcrumb bar (narrow)
   - CSS framework with design tokens, dark mode, and component styles
   - `NavNode` registration via `register_nav_node()` during module registration
@@ -36,7 +79,8 @@ settings table and UI.
 ```
 framework/
 ├── __init__.py
-├── db.py                   # Database config, Base class, register_models()
+├── db/
+│   └── __init__.py         # Database config, Base class, async DB helpers
 ├── ui.py                   # PageAction, NavNode dataclasses, register_nav_node()
 ├── auth/
 │   ├── __init__.py         # Module exports
@@ -89,10 +133,11 @@ Build Current Affairs using the patterns established:
 ```
 together/
 ├── app.py
-├── schema.sql
+├── alembic.ini
 ├── framework/
 │   ├── __init__.py
-│   └── db.py
+│   └── db/
+│       └── __init__.py
 ├── modules/
 │   └── __init__.py
 ├── templates/

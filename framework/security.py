@@ -12,6 +12,11 @@ class SecurityHeadersMiddleware(AbstractMiddleware):
                 headers["X-Content-Type-Options"] = "nosniff"
                 headers["X-Frame-Options"] = "DENY"
                 headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+                headers["Content-Security-Policy"] = (
+                    "default-src 'self'; "
+                    "script-src 'self'; "
+                    "style-src 'self'"
+                )
             await send(message)
 
         await self.app(scope, receive, send_wrapper)

@@ -19,6 +19,7 @@ from framework.auth.guards import AuthRequired, auth_required_handler
 from framework.db import create_db_config
 from framework.security import SecurityHeadersMiddleware
 from framework.auth.middleware import SessionMiddleware
+from framework.ui import NavNode, get_nav_nodes
 from modules import home
 
 home.register()
@@ -28,8 +29,16 @@ db_config = create_db_config()
 
 def register_template_callables(engine: JinjaTemplateEngine) -> None:
     engine.register_template_callable(
+        key="get_nav_nodes",
+        template_callable=lambda _ctx: get_nav_nodes(),
+    )
+    engine.register_template_callable(
         key="get_current_user",
         template_callable=get_current_user_template,
+    )
+    engine.register_template_callable(
+        key="home_node",
+        template_callable=lambda _ctx: NavNode(label="Home", href="/"),
     )
 
 
