@@ -7,7 +7,7 @@ import sys
 from sqlalchemy.exc import IntegrityError
 
 from framework.auth.models import User
-from framework.db import open_async_session
+from framework.db import create_db_config, open_async_session
 
 
 def _print_usage() -> None:
@@ -25,6 +25,8 @@ def _prompt_password() -> str:
 
 
 async def _create_user(username: str) -> int:
+    create_db_config()
+
     if not username:
         print("Error: Username is required")
         return 1

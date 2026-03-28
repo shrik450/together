@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import os
 from urllib.parse import urlparse
 
@@ -33,6 +34,7 @@ def _get_max_age_seconds() -> int:
     return days * 24 * 60 * 60
 
 
+@lru_cache(maxsize=1)
 def get_session_config() -> SessionConfig:
     secret_key = os.getenv("TOGETHER_SECRET_KEY")
     if not secret_key:

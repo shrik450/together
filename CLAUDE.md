@@ -48,6 +48,9 @@ uv run python <file.py>
 ## Coding Guidelines
 
 - Always use `uv` for all Python or python related commands.
+- Default to `async def` for request handlers and dependencies, even when they do
+  not currently await anything. Do not add `sync_to_thread=False`; if something
+  should be synchronous, make that an explicit exception rather than the default.
 - Keep all sensitive information (API keys, secrets) in environment variables or
   `.env` files, never hardcoded or passed as CLI args etc.
 - Do not add comments unless they are necessary to understand _why_ something
