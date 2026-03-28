@@ -21,10 +21,53 @@ The webapp is built on the following stack:
 
 1. Litestar as the server
 2. HTMX for client-side interactivity
-3. SQLAlchemy with SQLite for the database
-4. APScheduler for scheduling periodic tasks
+3. Advanced Alchemy + SQLAlchemy with async SQLite for the database
+4. APScheduler 4.x for scheduling periodic tasks
 5. uv as the package manager
 6. Docker for deployment
 
 The architecture is designed to make adding modules easy and provide a simple
 framework for building them; see `docs/architecture.md`.
+
+Note: this project intentionally targets APScheduler 4.x even though that line
+is still alpha, because its async-native design fits the rest of the stack.
+
+## Environment
+
+Copy `.env.example` and fill in values as needed.
+
+Required:
+
+- `TOGETHER_DATABASE_URL` - absolute SQLite URL for the app database, for example:
+  `sqlite+aiosqlite:////absolute/path/to/together.db`
+- `TOGETHER_SECRET_KEY` - secret for signing session cookies. Generate one with:
+  `python -c "import secrets; print(secrets.token_hex(32))"`
+
+Optional:
+
+- `SESSION_MAX_AGE_DAYS` - session expiry in days (default: 30)
+- `TOGETHER_SECURE_COOKIES` - set `false` for local HTTP (default: true)
+
+## Local setup
+
+```bash
+uv sync
+uv run litestar database upgrade --no-prompt
+uv run python -m together create-user <username>
+uv run litestar run --reload
+```
+
+Use Litestar's database CLI only:
+
+```bash
+uv run litestar database --help
+```
+
+Raw `alembic` commands are intentionally unsupported in this project.
+
+Schema changes are migration-driven:
+
+```bash
+uv run litestar database make-migrations -m "describe change" --no-prompt
+uv run litestar database upgrade --no-prompt
+```

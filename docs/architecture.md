@@ -27,14 +27,16 @@ References:
 
 ### SQLAlchemy
 
-- **Version**: 2.0+ (sync mode with SQLite)
-- **Session management**: Use Litestar's built-in SQLAlchemy plugin
-  (`SQLAlchemyPlugin`) which provides automatic session DI via `db_session`
-  parameter
-- **Models**: Inherit from plugin-provided `Base` class, use `Mapped[]` type
-  annotations (SQLAlchemy 2.0 style)
-- **Session config**: `expire_on_commit=False` for web apps (objects remain
-  usable after commit)
+- **Version**: SQLAlchemy 2.0+ via Advanced Alchemy's Litestar integration
+- **Session management**: Use `advanced_alchemy.extensions.litestar`
+  `SQLAlchemyInitPlugin` with `db_session: AsyncSession` DI
+- **Models**: Inherit from `framework.db.Base`, which wraps
+  `BigIntAuditBase` and provides integer primary keys plus audit timestamps
+- **Session config**: `expire_on_commit=False` with request-scoped async
+  autocommit before-send handling
+- **SQLite mode**: `TOGETHER_DATABASE_URL` is required and must be an absolute
+  `sqlite+aiosqlite` URL, with `connect_args={"autocommit": False}` and
+  central PRAGMA setup
 
 References:
 
@@ -132,22 +134,21 @@ prepends the Home level (`/`) and the module's registered `NavNode`.
    logic live in the module, not the framework. The framework provides
    infrastructure (database, auth, scheduling) but not policy.
 
-3. **Simple migrations**: A target `schema.sql` defines the current schema.
-   Migration scripts are written manually when needed. No heavy migration
-   framework.
+3. **Migration-owned schema**: Alembic migrations are the source of truth for
+   database schema changes and fresh database setup.
 
 ## Directory Structure
 
 ```
 together/
 ├── app.py                 # Litestar app entry point, explicit module registration
-├── schema.sql             # Target database schema (source of truth)
-├── together.db            # SQLite database (gitignored)
-├── migrations/            # Manual migration scripts (when needed)
+├── alembic.ini            # Alembic configuration generated via Litestar CLI
+├── together.db            # SQLite database (path configured via env)
+├── migrations/            # Alembic environment and revision files
 ├── framework/             # Shared infrastructure
 │   ├── __init__.py
 │   ├── auth/              # User auth, sessions
-│   ├── db.py              # Database config, Base class, register_models()
+│   ├── db/                # Database config, Base class, async DB helpers
 │   ├── ui.py              # PageAction, NavNode, register_nav_node()
 │   └── scheduler/         # APScheduler setup
 ├── modules/               # Feature modules
@@ -178,24 +179,25 @@ modules/current_affairs/
 
 ## Framework Components
 
-### Database (framework/db.py)
+### Database (framework/db/__init__.py)
 
-Uses Litestar's `SQLAlchemyPlugin` for session management:
+Uses Advanced Alchemy's Litestar integration for async session management:
 
-- Plugin provides `db_session: Session` dependency automatically
-- `Base` class from plugin for models to inherit from
-- `register_models(*models)` function for explicit model registration
-- Plugin configured with `create_all=False` (we manage schema manually)
-
-Modules define their models in `models.py`, inheriting from the shared `Base`,
-and explicitly register them in their `register()` function.
+- `SQLAlchemyInitPlugin` provides `db_session: AsyncSession` automatically
+- `Base` is the shared declarative base for app models
+- `open_async_session()` and `get_async_engine()` are the sanctioned helpers for
+  non-request database access
+- SQLite connection behavior is centralized with SQLAlchemy events
+- `TOGETHER_DATABASE_URL` is mandatory; there is no implicit local DB path
 
 **Schema management:**
 
-- `schema.sql` contains the complete current schema (CREATE TABLE statements)
-- To apply schema to a fresh DB: `sqlite3 together.db < schema.sql`
-- Migration scripts in `migrations/` for production changes (e.g.,
-  `migrations/001_add_quiz_answers.sql`)
+- `migrations/` contains the Alembic environment and revision files
+- Fresh databases are created with `uv run litestar database upgrade --no-prompt`
+- New schema changes are generated with
+  `uv run litestar database make-migrations -m "describe change" --no-prompt`
+- `uv run litestar database ...` is the only supported migration interface;
+  raw `alembic` commands are intentionally unsupported
 
 ### Authentication (framework/auth/)
 
@@ -206,6 +208,16 @@ The framework provides:
 - Session middleware (signed cookies)
 - `current_user` dependency for routes
 - `require_auth` guard for protected routes
+
+The middleware stores auth state as request metadata, not as a detached ORM
+instance. Route dependencies load `User` through the request-scoped session when
+needed.
+
+**Known limitations:**
+
+- No CSRF token protection. `SameSite=Lax` cookies and the app's personal
+  nature make this acceptable. Cross-site POST attacks could trigger a logout
+  but not authenticate or take actions.
 
 **User creation:**
 
@@ -232,7 +244,7 @@ Modules are registered explicitly in `app.py`. Each module exports:
 
 Each module's `register()` function:
 
-- Calls `register_models()` with all SQLAlchemy models
+- Imports any module-specific models before migrations/autogenerate run
 - Calls `add_schedule()` for any scheduled jobs
 - Calls `register_nav_node()` with the module's top-level `NavNode`
 - Raises clear errors if misconfigured
@@ -240,12 +252,11 @@ Each module's `register()` function:
 Example:
 
 ```python
-from framework.db import register_models
 from framework.scheduler import add_schedule
 from framework.ui import NavNode, register_nav_node
+from modules.current_affairs.models import Entry, Settings
 
 def register():
-    register_models(Entry, Settings)
     add_schedule("daily-briefing", generate_briefing, cron="0 7 * * *")
     register_nav_node(NavNode(label="Current Affairs", href="/current-affairs/", icon="newspaper"))
 ```
@@ -306,8 +317,6 @@ The framework validates module registration and provides clear errors:
 
 - Missing `register()` function: "Module 'eats' has no register() function"
 - Model not inheriting from Base: "Model 'Entry' must inherit from framework Base"
-- Model not registered: "Model 'Entry' inherits from Base but was not registered
-  via register_models()"
 - Schedule registration with invalid trigger: "Schedule 'xyz' has invalid cron
   expression"
 
