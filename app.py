@@ -8,10 +8,12 @@ from litestar.static_files import create_static_files_router
 from litestar.template.config import TemplateConfig
 
 from framework import get_template_dirs
-from framework.db import db_config
+from framework.db import create_db_config
 from modules import home
 
 home.register()
+
+db_config = create_db_config()
 
 
 app = Litestar(
