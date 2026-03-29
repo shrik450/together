@@ -252,12 +252,19 @@ Each module's `register()` function:
 Example:
 
 ```python
-from framework.scheduler import add_schedule
+from framework.scheduler import ScheduleDefinition, ScheduleRef, add_schedule
 from framework.ui import NavNode, register_nav_node
 from modules.current_affairs.models import Entry, Settings
 
+DAILY_BRIEFING = ScheduleRef("current-affairs-daily-briefing")
+
 def register():
-    add_schedule("daily-briefing", generate_briefing, cron="0 7 * * *")
+    add_schedule(ScheduleDefinition(
+        ref=DAILY_BRIEFING,
+        func=generate_briefing,
+        cron="0 7 * * *",
+        timezone="America/New_York",
+    ))
     register_nav_node(NavNode(label="Current Affairs", href="/current-affairs/", icon="newspaper"))
 ```
 
