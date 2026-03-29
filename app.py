@@ -22,6 +22,7 @@ from framework.auth.middleware import SessionMiddleware
 from framework.ui import NavNode, get_nav_nodes
 from modules import home
 
+# Register module-owned template directories before constructing the app's Jinja config.
 home.register()
 
 db_config = create_db_config()

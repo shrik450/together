@@ -64,6 +64,7 @@ def _get_sqlite_connection(dbapi_connection):
 def _configure_sqlite(dbapi_connection, _connection_record) -> None:
     sqlite_connection = _get_sqlite_connection(dbapi_connection)
     original_autocommit = sqlite_connection.autocommit
+    # Temporarily enable autocommit so connection-level PRAGMAs take effect immediately.
     sqlite_connection.autocommit = True
 
     cursor = sqlite_connection.cursor()
@@ -113,5 +114,10 @@ def get_async_engine() -> AsyncEngine:
 
 @asynccontextmanager
 async def open_async_session() -> AsyncIterator[AsyncSession]:
+    """Open an async database session for non-request code.
+
+    Unlike request-scoped sessions managed by Litestar, callers are responsible
+    for committing or rolling back explicitly.
+    """
     async with _get_config().get_session() as session:
         yield session

@@ -9,6 +9,7 @@ _template_dirs: list["PathType"] = [Path("templates")]
 
 
 def register_template_dirs(*paths: "PathType") -> None:
+    """Register additional template directories for module-owned templates."""
     for path in paths:
         resolved = Path(path)
         if not resolved.is_dir():

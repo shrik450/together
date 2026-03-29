@@ -596,6 +596,7 @@ button {
 }
 
 .action-form {
+    /* Flatten action forms so POST buttons lay out like plain topbar actions without losing form submission semantics. */
     display: contents;
 }
 

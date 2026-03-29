@@ -76,6 +76,7 @@ def parse_session_cookie(cookie: str, config: SessionConfig) -> int | None:
 
 
 def is_safe_redirect(url: str | None) -> bool:
+    """Allow only same-site relative redirects rooted at `/`."""
     if not url:
         return False
     parsed = urlparse(url)
@@ -83,6 +84,7 @@ def is_safe_redirect(url: str | None) -> bool:
 
 
 def normalize_next_url(url: str | None) -> str:
+    """Return a validated post-login redirect target, defaulting to `/`."""
     if is_safe_redirect(url):
         return url
     return "/"

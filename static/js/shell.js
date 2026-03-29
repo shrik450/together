@@ -1,3 +1,4 @@
+// JS only toggles aria-expanded; CSS adjacent-sibling rules handle dropdown visibility.
 document.querySelectorAll('.breadcrumb-item').forEach(item => {
     const trigger = item.querySelector('.breadcrumb-trigger');
     const dropdown = item.querySelector('.breadcrumb-dropdown');

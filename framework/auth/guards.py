@@ -30,6 +30,13 @@ def _build_login_url(connection: ASGIConnection) -> str:
 
 
 def require_auth(connection: ASGIConnection, _: BaseRouteHandler) -> None:
+    """Require an authenticated user for non-exempt routes.
+
+    Guards signal unauthenticated access by raising `AuthRequired`; the app-level
+    exception handler turns that into either a normal redirect or an HTMX-aware
+    `HX-Redirect` response.
+    """
+
     path = connection.url.path
     if _is_exempt_path(path):
         return

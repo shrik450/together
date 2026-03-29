@@ -18,6 +18,13 @@ class AuthenticatedUser:
 
 
 class SessionMiddleware(AbstractMiddleware):
+    """Load auth state from the signed session cookie into request.state.
+
+    The middleware stores a lightweight authenticated-user snapshot rather than
+    a live ORM instance so later code can load `User` through the request-scoped
+    session when needed.
+    """
+
     exclude = ["/static", "/static/*"]
 
     def __init__(self, app, **kwargs) -> None:
