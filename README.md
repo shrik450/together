@@ -24,10 +24,12 @@ The webapp is built on the following stack:
 3. Advanced Alchemy + SQLAlchemy with async SQLite for the database
 4. APScheduler 4.x for scheduling periodic tasks
 5. uv as the package manager
-6. Docker for deployment
+6. uv + SQLite for a simple server deployment
 
 The architecture is designed to make adding modules easy and provide a simple
 framework for building them; see `docs/architecture.md`.
+
+For setup and deployment, see `docs/getting_started.md`.
 
 Note: this project intentionally targets APScheduler 4.x even though that line
 is still alpha, because its async-native design fits the rest of the stack.
