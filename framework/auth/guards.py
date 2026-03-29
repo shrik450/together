@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
+from litestar import Request
 from litestar.connection import ASGIConnection
 from litestar.handlers.base import BaseRouteHandler
 from litestar.response import Redirect, Response
 
 from framework.auth.session import normalize_next_url
+from framework.auth.state import get_auth_user_id
 
 
 class AuthRequired(Exception):
@@ -41,14 +43,13 @@ def require_auth(connection: ASGIConnection, _: BaseRouteHandler) -> None:
     if _is_exempt_path(path):
         return
 
-    user_id = getattr(connection.state, "user_id", None)
-    if user_id is not None:
+    if get_auth_user_id(connection) is not None:
         return
 
     raise AuthRequired(redirect_to=_build_login_url(connection))
 
 
-def auth_required_handler(request, exc: AuthRequired):
+def auth_required_handler(request: Request, exc: AuthRequired) -> Response | Redirect:
     if request.headers.get("HX-Request") == "true":
         return Response(
             content=None,

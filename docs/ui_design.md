@@ -86,8 +86,7 @@ The shell and content have distinct responsibilities:
 - **Shell (UI chrome)**
   - Always uses system UI font and base framework styling
   - Handles navigation (sidebar, breadcrumb bar)
-  - Hosts page-level actions via a registration mechanism (modules declare
-    available actions; the shell renders them)
+  - Hosts page-level actions via the `actions` template context variable
   - Styled consistently across all modules
 
 - **Content (module pane)**
@@ -175,10 +174,11 @@ for quick-switching.
 2. First node in each level is the **active node**; remaining nodes are
    **siblings** for quick-switching
 3. The **last level** is implicitly the current page
-4. Handler provides only levels **within the module**
-5. Shell automatically prepends two levels:
-   - Level 0: `[NavNode(label="Home", href="/")]`
-   - Level 1: The module's registered `NavNode` (see `docs/architecture.md`)
+4. Handlers currently provide the levels they want rendered for the current
+   page
+5. The scaffolded shell always ensures Home appears in breadcrumb rendering
+6. Registered top-level module `NavNode`s populate the sidebar when modules
+   call `register_nav_node()`
 
 **Example - entry page** (`/current-affairs/2026-01-10`):
 
@@ -199,7 +199,7 @@ async def entry_page() -> Template:
     )
 ```
 
-Full stack after shell prepends:
+Illustrative full stack once a module registers its top-level nav node:
 
 ```
 [
@@ -243,7 +243,7 @@ context={
 
 | Viewport | Behavior |
 |----------|----------|
-| **Narrow** | Breadcrumb bar shows only the **last two levels**: `[Back target ▾] > [Current page ▾]`. Tapping a node with siblings opens a dropdown for quick-switching. |
+| **Narrow** | Breadcrumb bar shows only the **last two levels** of the rendered stack. Tapping a node with siblings opens a dropdown for quick-switching. |
 | **Wide** | Sidebar shows all top-level modules. The active module is expanded, showing the full path with siblings visible at each level. |
 
 ---
@@ -256,7 +256,7 @@ context={
 
 ### Global App Shell & Navigation
 
-Together has a consistent app shell that wraps every module. Navigation state is
+Together has a consistent app shell that wraps every page. Navigation state is
 provided via the `nav_stack` context variable (see "Navigation Model" above).
 
 - **Layout modes**
@@ -266,16 +266,17 @@ provided via the `nav_stack` context variable (see "Navigation Model" above).
     module content below.
 - **Sidebar navigation (wide)**
   - Functions like a small file tree / accordion.
-  - Top-level items are modules (registered via `register_nav_node()`).
+  - Top-level items are modules once those modules register via
+    `register_nav_node()`.
   - When inside a module, that module expands to show the current path with
     siblings visible at each level (from `nav_stack`).
   - Avoid unbounded lists in the sidebar; use "Recent N" items plus stable entry
     points and let deep browsing happen in the main pane.
 - **Breadcrumb bar (narrow)**
-  - Shows only the last two levels: `[Back target ▾] > [Current page ▾]`.
+  - Shows only the last two levels of the rendered navigation stack.
   - Tapping a node with siblings opens a dropdown for quick-switching.
-  - There is no dedicated "Home" crumb; backing out is done via the back target
-    (and ultimately browser back).
+  - The current scaffold can show `Home` as a crumb when it is one of those last
+    two levels.
   - The right side can include the logged-in user avatar/menu.
 - **Module ownership**
   - Everything to the right of the sidebar (or below the breadcrumb bar) is the
@@ -285,7 +286,8 @@ provided via the `nav_stack` context variable (see "Navigation Model" above).
 
 ### Navigation & HTMX
 
-- Prefer boosted navigation and partial swaps for in-app navigation.
+- Prefer boosted navigation and partial swaps for in-app navigation once feature
+  modules need them.
 - Every view should still have a canonical URL (no client-only state).
 - Avoid modals as a primary interaction pattern; prefer:
   - inline expansion/collapsing sections

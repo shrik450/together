@@ -4,12 +4,12 @@ This document outlines the scaffolding layers needed to build the app.
 
 ## Progress
 
-Last updated: 2026-03-28
+Last updated: 2026-03-29
 
 | Layer | Status | Summary |
 | --- | --- | --- |
 | Layer 1: Core App Structure | ✅ Complete | All components implemented |
-| Layer 2: Framework Features | 🚧 Partial | App Shell and Auth complete; Scheduler pending |
+| Layer 2: Framework Features | ✅ Complete | Auth, scheduler scaffolding, and app shell implemented |
 | Layer 3: First Module | ❌ Not Started | — |
 
 ### Layer 1 Details
@@ -33,10 +33,10 @@ Last updated: 2026-03-28
 | ↳ `current_user` dependency | ✅ | `framework/auth/dependencies.py` |
 | ↳ `require_auth` guard | ✅ | `framework/auth/guards.py` |
 | ↳ CLI user creation | ✅ | `uv run python -m together create-user <username>` |
-| **Scheduler** | ❌ | |
-| ↳ AsyncScheduler setup | ❌ | APScheduler 4.x is an intentional choice despite still being alpha |
-| ↳ Lifespan integration | ❌ | |
-| ↳ `add_schedule()` function | ❌ | |
+| **Scheduler** | ✅ | Implemented in `framework/scheduler/` and wired into `app.py` |
+| ↳ AsyncScheduler setup | ✅ | APScheduler 4.x remains an intentional choice despite still being alpha |
+| ↳ Lifespan integration | ✅ | `scheduler_lifespan()` registered on the app |
+| ↳ `add_schedule()` function | ✅ | `framework.scheduler.add_schedule()` available for module registration |
 | **App Shell** | ✅ | |
 | ↳ `NavNode` / `PageAction` dataclasses | ✅ | `framework/ui.py` |
 | ↳ `register_nav_node()` | ✅ | `framework/ui.py` |
@@ -52,7 +52,7 @@ The foundation that everything else builds on:
 - Templating (Jinja2 with shared + module template paths)
 - Static file serving
 
-## Layer 2: Framework Features 🚧
+## Layer 2: Framework Features ✅
 
 Shared infrastructure that modules depend on:
 
@@ -64,6 +64,8 @@ Shared infrastructure that modules depend on:
 - **Scheduler**: APScheduler 4.x AsyncScheduler with SQLite data store
   - Lifespan integration for automatic start/stop
   - `add_schedule()` function for modules to register cron jobs
+  - Scheduler infrastructure is scaffolded; concrete schedules are expected to be
+    registered by modules in later layers
   - APScheduler 4.x is intentional even though it is still alpha; we prefer its
     async-native design over the stable 3.x line for this app
 - **App Shell**: Responsive layout with sidebar (wide) and breadcrumb bar (narrow)
@@ -80,7 +82,8 @@ settings table and UI.
 framework/
 ├── __init__.py
 ├── db/
-│   └── __init__.py         # Database config, Base class, async DB helpers
+│   ├── __init__.py         # Database config, Base class, async DB helpers
+│   └── engine.py           # Shared SQLite engine / PRAGMA wiring
 ├── ui.py                   # PageAction, NavNode dataclasses, register_nav_node()
 ├── auth/
 │   ├── __init__.py         # Module exports
@@ -88,18 +91,22 @@ framework/
 │   ├── handlers.py         # Login/logout routes
 │   ├── middleware.py       # Session middleware
 │   ├── dependencies.py     # current_user provider
-│   └── guards.py           # require_auth guard
+│   ├── guards.py           # require_auth guard
+│   └── session.py          # Session config and cookie signing helpers
 └── scheduler/
     ├── __init__.py         # Module exports
-    └── setup.py            # AsyncScheduler setup
+    └── service.py          # AsyncScheduler setup and lifecycle
 
 templates/
 ├── base.html               # Full app shell
 └── auth/
+    ├── base.html           # Auth-specific base template
     └── login.html          # Login form
 
 static/
-└── style.css               # Full CSS framework
+├── style.css               # Full CSS framework
+└── js/
+    └── shell.js            # Shell dropdown behavior
 ```
 
 ## Layer 3: First Module
@@ -115,11 +122,11 @@ Build Current Affairs using the patterns established:
 1. **Layer 1** - Get a working Litestar app that:
    - Serves a "hello world" template
    - Connects to SQLite
-   - Has a placeholder module mounted at `/example/`
+   - Has a placeholder home module mounted at `/`
 
 2. **Layer 2** - Add framework features:
    - Auth (can log in, protected routes work)
-   - Scheduler (can register and run a test job)
+   - Scheduler infrastructure (modules can register jobs in later layers)
 
 3. **Layer 3** - Build Current Affairs module incrementally:
    - Static entry display (hardcoded data)
@@ -134,14 +141,19 @@ Build Current Affairs using the patterns established:
 together/
 ├── app.py
 ├── alembic.ini
+├── migrations/
 ├── framework/
 │   ├── __init__.py
 │   └── db/
-│       └── __init__.py
+│       ├── __init__.py
+│       └── engine.py
 ├── modules/
-│   └── __init__.py
+│   ├── __init__.py
+│   └── home/
 ├── templates/
-│   └── base.html
+│   ├── base.html
+│   └── auth/
 └── static/
-    └── style.css
+    ├── style.css
+    └── js/
 ```

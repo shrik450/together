@@ -5,7 +5,7 @@ This is an app for Samhita and Me ❤️
 ## Intro
 
 This is a webapp for us to keep track of what we do together *and* enable us to
-do more things together. It has features like:
+do more things together. It is being built around modules like:
 
 1. A "current affairs" module, which helps us talk about current affairs on a
    regular basis and keep track of what we've discussed.
@@ -16,6 +16,10 @@ do more things together. It has features like:
 3. A relationship journal
 
 It is structured as a webapp with sub-routes for each module.
+
+Current status: the scaffolded app shell, auth flow, database integration, and
+scheduler infrastructure are in place. Feature modules beyond the placeholder
+home route have not been built yet.
 
 The webapp is built on the following stack:
 

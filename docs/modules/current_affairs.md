@@ -96,8 +96,9 @@ to this module:
 
 - **User accounts**: Each person logs in and fills their own reflections/quiz
   answers
-- **Settings**: DB-backed configuration with UI (not config files) so non-
-  technical users can adjust themes, generation time, etc.
+- **Shared primitives**: Database access, auth, scheduler registration, and the
+  app shell come from the framework scaffold; this module owns its own settings
+  table and settings UI
 
 ---
 
@@ -115,12 +116,11 @@ not specific to Current Affairs.
 - FR-F1.3: All user-generated content (quiz answers, reflections) is associated
   with the logged-in user
 
-### FR-F2: Settings Infrastructure
+### FR-F2: Module Settings
 
-- FR-F2.1: Settings are stored in the database
-- FR-F2.2: Settings are editable via a UI
-- FR-F2.3: Modules can register their own settings (e.g., this module registers
-  "generation time", "themes")
+- FR-F2.1: Current Affairs settings are stored in the database
+- FR-F2.2: Current Affairs settings are editable via a UI
+- FR-F2.3: This module owns settings such as generation time and themes
 
 ### FR-F3: Scheduled Jobs Infrastructure
 
@@ -203,4 +203,3 @@ not specific to Current Affairs.
   and reflections
 - FR-M8.6: System tracks theme usage patterns (e.g., "discussed economics 12
   times this month")
-

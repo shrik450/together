@@ -9,11 +9,20 @@ own their own engine instances against the same SQLite file.
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict, Unpack
 
 from sqlalchemy import event
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+
+
+class SqliteEngineConfig(TypedDict, total=False):
+    # Keep this helper's surface limited to the engine kwargs the app actually
+    # forwards, so new options are added intentionally instead of leaking `Any`.
+    connect_args: dict[str, object]
+    echo: bool
+    pool_size: int
+    pool_pre_ping: bool
 
 
 def get_database_url() -> str:
@@ -74,7 +83,7 @@ def configure_sqlite_connection(dbapi_connection: Any, _connection_record: Any) 
 
 
 def create_sqlite_async_engine(
-    connection_string: str, **engine_config: Any
+    connection_string: str, **engine_config: Unpack[SqliteEngineConfig]
 ) -> AsyncEngine:
     engine = create_async_engine(connection_string, **engine_config)
     event.listen(engine.sync_engine, "connect", configure_sqlite_connection)

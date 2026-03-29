@@ -1,6 +1,7 @@
 # Architecture
 
-This document describes the target architecture for the Together app.
+This document describes the current architecture of the Together scaffold and
+the extension points future modules are expected to use.
 
 ## Technology Stack & Conventions
 
@@ -119,8 +120,9 @@ async def entry_page() -> Template:
     )
 ```
 
-The `nav_stack` contains only levels within the module. The shell automatically
-prepends the Home level (`/`) and the module's registered `NavNode`.
+Handlers currently provide the page's `nav_stack` directly. The shell always
+ensures Home (`/`) appears in breadcrumb rendering, while registered module
+`NavNode`s populate the sidebar when modules add them.
 
 ---
 
@@ -153,16 +155,14 @@ together/
 │   └── scheduler/         # APScheduler setup
 ├── modules/               # Feature modules
 │   ├── __init__.py
-│   ├── current_affairs/
-│   ├── eats/
-│   └── journal/
+│   └── home/
 ├── templates/             # Shared templates (base layout, components)
 └── static/                # CSS, JS, images
 ```
 
 ## Module Structure
 
-Each module is a self-contained package:
+Feature modules are expected to be self-contained packages like:
 
 ```
 modules/current_affairs/
@@ -232,22 +232,28 @@ Uses APScheduler 4.x `AsyncScheduler` with lifespan integration:
 - SQLite data store for persistence across restarts
 - Modules register schedules via `add_schedule()` function during `register()`
 - Use `ConflictPolicy.replace` to handle app restarts gracefully
+- The scaffold provides the scheduler boundary and registration API; no
+  application schedules are registered yet
 
 ---
 
 ## Module Registration
 
-Modules are registered explicitly in `app.py`. Each module exports:
+Modules are registered explicitly in `app.py`. Full feature modules are
+expected to export:
 
 - `router`: A `Router` instance to mount on the app
 - `register()`: Function that registers models, schedules, and navigation
 
-Each module's `register()` function:
+Each feature module's `register()` function should:
 
 - Imports any module-specific models before migrations/autogenerate run
 - Calls `add_schedule()` for any scheduled jobs
 - Calls `register_nav_node()` with the module's top-level `NavNode`
-- Raises clear errors if misconfigured
+- Raise clear errors if misconfigured
+
+The current `home` scaffold is intentionally lighter-weight and only registers
+its template directory.
 
 Example:
 
@@ -294,21 +300,23 @@ their pages into the main content pane.
 > For UX rationale, visual design, and detailed behavior specifications, see
 > `docs/ui_design.md`.
 
-Navigation state is provided via the `nav_stack` context variable. The shell
-automatically prepends Home (`/`) and the module's registered `NavNode`. See
-`docs/ui_design.md` for the full navigation model specification.
+Navigation state is provided via the `nav_stack` context variable. The current
+shell uses that stack directly, ensures Home appears in breadcrumb rendering,
+and lists registered module nodes in the sidebar when present. See
+`docs/ui_design.md` for the navigation model and current scaffold notes.
 
 - **Wide viewports (`min-width: 900px`)**: Persistent left sidebar showing all
   modules, with the active module expanded to show the current path and siblings.
 - **Narrow viewports**: A breadcrumb bar showing the last two levels, with
   dropdowns for sibling quick-switching.
-- **HTMX-friendly shell**: In-app links should be boostable so navigation can
-  swap the content pane without re-rendering the whole shell.
+- **HTMX-friendly shell**: HTMX is installed and available for progressive
+  enhancement; boosted partial navigation has not been implemented yet.
 
 ---
 
 ## Route Conventions
 
+- Home route: `/`
 - Auth routes: `/auth/login`, `/auth/logout`
 - Module routes: `/<module-name>/...`
   - Current Affairs: `/current-affairs/`, `/current-affairs/<date>/`
@@ -316,16 +324,20 @@ automatically prepends Home (`/`) and the module's registered `NavNode`. See
   - Journal: `/journal/`, `/journal/<entry-id>/`
 - Static files: `/static/...`
 
+Only `/`, `/auth/...`, and `/static/...` exist in the current scaffold.
+
 ---
 
 ## Error Handling
 
-The framework validates module registration and provides clear errors:
+The current scaffold already provides explicit validation in a few shared
+surfaces:
 
-- Missing `register()` function: "Module 'eats' has no register() function"
-- Model not inheriting from Base: "Model 'Entry' must inherit from framework Base"
-- Schedule registration with invalid trigger: "Schedule 'xyz' has invalid cron
-  expression"
+- Invalid or duplicate schedule registration raises clear errors from
+  `framework/scheduler/service.py`
+- Missing auth secrets or invalid database configuration fail fast during app
+  setup
+- More module-registration validation can be added once feature modules exist
 
 ---
 

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from litestar import Request, Router, get, post
+from litestar.enums import RequestEncodingType
+from litestar.params import Body
 from litestar.response import Redirect, Template
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +15,16 @@ from framework.auth.session import (
     get_session_config,
     normalize_next_url,
 )
+from framework.auth.state import get_auth_user_id
+
+
+@dataclass(frozen=True, slots=True)
+class LoginFormData:
+    """Type the login form at the boundary so raw form values stay out of handlers."""
+
+    username: str = ""
+    password: str = ""
+    next: str = ""
 
 
 def _set_session_cookie(response: Redirect, user_id: int) -> None:
@@ -29,18 +43,18 @@ def _set_session_cookie(response: Redirect, user_id: int) -> None:
 
 def _clear_session_cookie(response: Redirect) -> None:
     config = get_session_config()
+    # Litestar's delete_cookie() only accepts key/path/domain, so keep logout on
+    # that API instead of trying to mirror set_cookie() options.
     response.delete_cookie(
         key=config.cookie_name,
         path="/",
-        secure=config.secure_cookies,
-        samesite=config.same_site,
     )
 
 
 @get("/login")
 async def login_page(request: Request) -> Template | Redirect:
     next_url = normalize_next_url(request.query_params.get("next"))
-    if getattr(request.state, "user_id", None) is not None:
+    if get_auth_user_id(request) is not None:
         return Redirect(next_url)
     return Template(
         template_name="auth/login.html",
@@ -50,12 +64,12 @@ async def login_page(request: Request) -> Template | Redirect:
 
 @post("/login")
 async def login_submit(
-    request: Request, db_session: AsyncSession
+    db_session: AsyncSession,
+    data: LoginFormData = Body(media_type=RequestEncodingType.URL_ENCODED),
 ) -> Template | Redirect:
-    form = await request.form()
-    username = str(form.get("username") or "").strip()
-    password = str(form.get("password") or "")
-    next_url = normalize_next_url(str(form.get("next") or ""))
+    username = data.username.strip()
+    password = data.password
+    next_url = normalize_next_url(data.next)
 
     user = (
         await db_session.execute(select(User).where(User.username == username))
