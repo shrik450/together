@@ -3,7 +3,6 @@ from pathlib import Path
 from advanced_alchemy.extensions.litestar import SQLAlchemyInitPlugin
 from litestar import Litestar
 from litestar.contrib.jinja import JinjaTemplateEngine
-from litestar.middleware import DefineMiddleware
 from litestar.plugins.htmx import HTMXPlugin
 from litestar.static_files import create_static_files_router
 from litestar.template.config import TemplateConfig
@@ -16,10 +15,10 @@ from framework.auth import (
     require_auth,
 )
 from framework.auth.guards import AuthRequired, auth_required_handler
+from framework.auth.middleware import SessionMiddleware
 from framework.db import create_db_config
 from framework.scheduler import scheduler_lifespan
 from framework.security import SecurityHeadersMiddleware
-from framework.auth.middleware import SessionMiddleware
 from framework.ui import NavNode, get_nav_nodes
 from modules import home
 
@@ -53,8 +52,8 @@ app = Litestar(
     guards=[require_auth],
     exception_handlers={AuthRequired: auth_required_handler},
     middleware=[
-        DefineMiddleware(SecurityHeadersMiddleware),
-        DefineMiddleware(SessionMiddleware),
+        SecurityHeadersMiddleware(),
+        SessionMiddleware(),
     ],
     plugins=[
         SQLAlchemyInitPlugin(config=db_config),

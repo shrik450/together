@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from litestar import Request
-from litestar.middleware.base import AbstractMiddleware
+from litestar.middleware import ASGIMiddleware
 from litestar.types import ASGIApp, Receive, Scope, Send
 from sqlalchemy import select
 
@@ -17,7 +17,7 @@ from framework.auth.state import (
 from framework.db import open_async_session
 
 
-class SessionMiddleware(AbstractMiddleware):
+class SessionMiddleware(ASGIMiddleware):
     """Load auth state from the signed session cookie into request.state.
 
     The middleware stores a lightweight authenticated-user snapshot rather than
@@ -25,13 +25,29 @@ class SessionMiddleware(AbstractMiddleware):
     session when needed.
     """
 
-    exclude = ["/static", "/static/*"]
+    should_bypass_for_scope = staticmethod(
+        lambda scope: scope.get("path", "").startswith("/static")
+    )
 
-    def __init__(self, app: ASGIApp, **kwargs: Any) -> None:
-        super().__init__(app, **kwargs)
+    def __init__(self, app: ASGIApp | None = None, **kwargs: Any) -> None:
+        self._app = app
         self._session_config = get_session_config()
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        if "app" in kwargs and len(kwargs) == 1 and not args:
+            return super().__call__(kwargs["app"])
+        if len(args) == 1 and not kwargs:
+            return super().__call__(args[0])
+        if len(args) == 3 and not kwargs and self._app is not None:
+            scope, receive, send = args
+            return self.handle(scope, receive, send, self._app)
+        raise TypeError(
+            "SessionMiddleware expected either an app or ASGI call arguments"
+        )
+
+    async def handle(
+        self, scope: Scope, receive: Receive, send: Send, next_app: ASGIApp
+    ) -> None:
         initialize_auth_state(scope)
 
         request = Request(scope, receive)
@@ -51,4 +67,4 @@ class SessionMiddleware(AbstractMiddleware):
                         AuthenticatedUser(id=user.id, username=user.username),
                     )
 
-        await self.app(scope, receive, send)
+        await next_app(scope, receive, send)

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from litestar.datastructures import MutableScopeHeaders
-from litestar.middleware.base import AbstractMiddleware
-from litestar.types import Message, Receive, Scope, Send
+from litestar.middleware import ASGIMiddleware
+from litestar.types import ASGIApp, Message, Receive, Scope, Send
 
 
-class SecurityHeadersMiddleware(AbstractMiddleware):
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+class SecurityHeadersMiddleware(ASGIMiddleware):
+    async def handle(
+        self, scope: Scope, receive: Receive, send: Send, next_app: ASGIApp
+    ) -> None:
         async def send_wrapper(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = MutableScopeHeaders.from_message(message)
@@ -18,4 +20,4 @@ class SecurityHeadersMiddleware(AbstractMiddleware):
                 )
             await send(message)
 
-        await self.app(scope, receive, send_wrapper)
+        await next_app(scope, receive, send_wrapper)

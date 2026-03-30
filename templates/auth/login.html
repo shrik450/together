@@ -1,47 +1,44 @@
-{% extends "auth/base.html" %}
-
-{% block title %}Log in{% endblock %}
-
-{% block content %}
+{% extends "auth/base.html" %} {% block title %}Log in{% endblock %} {% block
+content %}
 <main class="auth-container">
-    <section class="auth-card" aria-labelledby="auth-title">
-        <header class="auth-header">
-            <div class="auth-brand">together</div>
-            <h1 id="auth-title" class="auth-title">Log in</h1>
-        </header>
+  <section class="auth-card" aria-labelledby="auth-title">
+    <header class="auth-header">
+      <div class="auth-brand">together</div>
+      <h1 id="auth-title" class="auth-title">Log in</h1>
+    </header>
 
-        {% if error %}
-            <div class="alert alert-danger" role="alert">{{ error }}</div>
-        {% endif %}
+    {% if error %}
+    <div class="alert alert-danger" role="alert">{{ error }}</div>
+    {% endif %}
 
-        <form method="post" action="/auth/login" class="auth-form">
-            <div class="field">
-                <label class="label" for="username">Username</label>
-                <input
-                    class="input"
-                    type="text"
-                    id="username"
-                    name="username"
-                    value="{{ username }}"
-                    autocomplete="username"
-                    required
-                    autofocus
-                />
-            </div>
-            <div class="field">
-                <label class="label" for="password">Password</label>
-                <input
-                    class="input"
-                    type="password"
-                    id="password"
-                    name="password"
-                    autocomplete="current-password"
-                    required
-                />
-            </div>
-            <input type="hidden" name="next" value="{{ next }}" />
-            <button type="submit" class="btn btn-primary auth-submit">Log in</button>
-        </form>
-    </section>
+    <form method="post" action="/auth/login" class="auth-form">
+      <div class="field">
+        <label class="label" for="username">Username</label>
+        <input
+          class="input"
+          type="text"
+          id="username"
+          name="username"
+          value="{{ username }}"
+          autocomplete="username"
+          required
+          autofocus
+        />
+      </div>
+      <div class="field">
+        <label class="label" for="password">Password</label>
+        <input
+          class="input"
+          type="password"
+          id="password"
+          name="password"
+          autocomplete="current-password"
+          required
+        />
+      </div>
+      <input type="hidden" name="next" value="{{ next }}" />
+      <button type="submit" class="btn btn-primary auth-submit">Log in</button>
+    </form>
+  </section>
 </main>
 {% endblock %}

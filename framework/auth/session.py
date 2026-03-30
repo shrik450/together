@@ -67,7 +67,7 @@ def parse_session_cookie(cookie: str, config: SessionConfig) -> int | None:
     serializer = _get_serializer(config)
     try:
         data = serializer.loads(cookie, max_age=config.max_age_seconds)
-    except (BadSignature, SignatureExpired):
+    except BadSignature, SignatureExpired:
         return None
     user_id = data.get("user_id")
     if not isinstance(user_id, int):

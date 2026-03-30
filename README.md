@@ -57,10 +57,31 @@ Optional:
 ## Local setup
 
 ```bash
-uv sync
+uv sync --dev
+npm install
 uv run litestar database upgrade --no-prompt
 uv run python -m together create-user <username>
-uv run litestar run --reload
+just dev
+```
+
+To install both toolchains through the task runner:
+
+```bash
+just setup
+```
+
+To run the test suite:
+
+```bash
+uv run pytest
+```
+
+To lint, format, and run CI-style checks:
+
+```bash
+just lint
+just test
+just check
 ```
 
 Use Litestar's database CLI only:

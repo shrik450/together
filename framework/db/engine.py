@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Shared SQLite engine setup for Together's framework internals.
 
 The reusable engine and PRAGMA wiring lives here so `framework.db.__init__` can
 stay a small public entry point while components like the scheduler create and
 own their own engine instances against the same SQLite file.
 """
+
+from __future__ import annotations
 
 import os
 from pathlib import Path
@@ -14,6 +14,7 @@ from typing import Any, TypedDict, Unpack
 from sqlalchemy import event
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.pool import Pool, PoolProxiedConnection
 
 
 class SqliteEngineConfig(TypedDict, total=False):
@@ -23,6 +24,7 @@ class SqliteEngineConfig(TypedDict, total=False):
     echo: bool
     pool_size: int
     pool_pre_ping: bool
+    poolclass: type[Pool]
 
 
 def get_database_url() -> str:
@@ -66,7 +68,9 @@ def get_sqlite_connection(dbapi_connection: Any):
     return sqlite_connection
 
 
-def configure_sqlite_connection(dbapi_connection: Any, _connection_record: Any) -> None:
+def configure_sqlite_connection(
+    dbapi_connection: Any, _connection_record: PoolProxiedConnection
+) -> None:
     sqlite_connection = get_sqlite_connection(dbapi_connection)
     original_autocommit = sqlite_connection.autocommit
     sqlite_connection.autocommit = True

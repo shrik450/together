@@ -13,7 +13,8 @@ This app can be deployed without Docker. A simple setup is:
 ```bash
 git clone <your-repo-url>
 cd together
-uv sync --frozen
+uv sync --frozen --dev
+npm install
 ```
 
 ## 2. Configure the environment
@@ -63,7 +64,22 @@ uv run litestar run --host 127.0.0.1 --port 8000
 
 Then proxy traffic from your domain to `127.0.0.1:8000` using Caddy or Nginx.
 
-## 5. Run it as a service
+## 5. Run tests
+
+Install the dev dependencies and run pytest:
+
+```bash
+uv run pytest
+```
+
+For formatter and lint checks:
+
+```bash
+just test
+just check
+```
+
+## 6. Run it as a service
 
 A minimal `systemd` unit might look like this:
 

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Framework-owned scheduler boundary for Together.
 
 This module keeps APScheduler 4.x confined behind a small framework API so the
@@ -13,6 +11,8 @@ the rest of the app. That keeps lifecycle ownership and infrastructure traffic
 inside the scheduler layer without duplicating the shared SQLite PRAGMA setup
 that already exists in `framework.db`.
 """
+
+from __future__ import annotations
 
 import inspect
 import logging
@@ -30,9 +30,8 @@ from apscheduler import AsyncScheduler, CoalescePolicy, ConflictPolicy, Schedule
 from apscheduler.datastores.sqlalchemy import SQLAlchemyDataStore
 from apscheduler.triggers.cron import CronTrigger
 from litestar import Litestar
-from sqlalchemy.ext.asyncio import AsyncEngine
 
-from framework.db import create_sqlite_async_engine, get_database_url
+from framework.db import get_database_url
 
 LOGGER = logging.getLogger("together.scheduler")
 APSCHEDULER_LOGGER = LOGGER.getChild("runtime")
@@ -200,10 +199,9 @@ async def scheduler_lifespan(app: Litestar) -> AsyncIterator[None]:
     work while still reusing the shared SQLite configuration from `framework.db`.
     """
 
-    scheduler_engine = _create_scheduler_engine()
     # APScheduler owns its operational tables directly so Alembic stays focused
     # on app/domain schema while scheduler runtime state remains an implementation detail.
-    data_store = SQLAlchemyDataStore(scheduler_engine)
+    data_store = SQLAlchemyDataStore(get_database_url())
     scheduler = AsyncScheduler(data_store=data_store, logger=APSCHEDULER_LOGGER)
 
     LOGGER.info("Starting scheduler")
@@ -229,16 +227,10 @@ async def scheduler_lifespan(app: Litestar) -> AsyncIterator[None]:
                 if hasattr(app.state, _STATE_KEY):
                     delattr(app.state, _STATE_KEY)
                 LOGGER.info("Stopping scheduler")
+                await scheduler.stop()
+                await scheduler.wait_until_stopped()
     finally:
-        await scheduler_engine.dispose()
         LOGGER.info("Scheduler stopped")
-
-
-def _create_scheduler_engine() -> AsyncEngine:
-    return create_sqlite_async_engine(
-        get_database_url(),
-        connect_args={"autocommit": False},
-    )
 
 
 def _registered_definitions() -> Mapping[str, ScheduleDefinition]:

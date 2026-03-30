@@ -12,3 +12,20 @@ dependencies = [
     "argon2-cffi>=23.1.0",
     "itsdangerous>=2.0.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.25.3",
+    "ruff>=0.15.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore:The garbage collector is trying to clean up non-checked-in connection .*:sqlalchemy.exc.SAWarning",
+]
+
+[tool.ruff]
+target-version = "py314"
