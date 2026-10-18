@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Annotated
 
 from litestar import Request, Router, get, post
+from litestar.di import NamedDependency
 from litestar.enums import RequestEncodingType
 from litestar.params import Body
 from litestar.response import Redirect, Template
@@ -64,8 +66,8 @@ async def login_page(request: Request) -> Template | Redirect:
 
 @post("/login")
 async def login_submit(
-    db_session: AsyncSession,
-    data: LoginFormData = Body(media_type=RequestEncodingType.URL_ENCODED),
+    db_session: NamedDependency[AsyncSession],
+    data: Annotated[LoginFormData, Body(media_type=RequestEncodingType.URL_ENCODED)],
 ) -> Template | Redirect:
     username = data.username.strip()
     password = data.password

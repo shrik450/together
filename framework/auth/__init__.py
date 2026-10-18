@@ -5,7 +5,6 @@ from framework.auth.guards import require_auth
 from framework.auth.handlers import auth_router
 from framework.auth.models import User
 
-
 __all__ = [
     "User",
     "auth_router",

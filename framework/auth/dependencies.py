@@ -3,18 +3,19 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from litestar import Request
+from litestar.di import NamedDependency
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from framework.auth.models import User
 from framework.auth.state import (
     AuthenticatedUser,
-    get_authenticated_user,
     get_auth_user_id,
+    get_authenticated_user,
 )
 
 
 async def provide_current_user(
-    request: Request, db_session: AsyncSession
+    request: Request, db_session: NamedDependency[AsyncSession]
 ) -> User | None:
     user_id = get_auth_user_id(request)
     if user_id is None:

@@ -14,7 +14,6 @@ This app can be deployed without Docker. A simple setup is:
 git clone <your-repo-url>
 cd together
 uv sync --frozen --dev
-npm install
 ```
 
 ## 2. Configure the environment
@@ -72,7 +71,7 @@ Install the dev dependencies and run pytest:
 uv run pytest
 ```
 
-For formatter and lint checks:
+For formatter and lint checks, from the flake dev shell (`nix develop`):
 
 ```bash
 just test

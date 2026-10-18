@@ -4,10 +4,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from litestar.types import PathType
 
-_template_dirs: list["PathType"] = [Path("templates")]
+_template_dirs: list[PathType] = [Path("templates")]
 
 
-def register_template_dirs(*paths: "PathType") -> None:
+def register_template_dirs(*paths: PathType) -> None:
     """Register additional template directories for module-owned templates."""
     for path in paths:
         resolved = Path(path)
@@ -17,5 +17,5 @@ def register_template_dirs(*paths: "PathType") -> None:
             _template_dirs.append(path)
 
 
-def get_template_dirs() -> list["PathType"]:
+def get_template_dirs() -> list[PathType]:
     return _template_dirs.copy()

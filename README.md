@@ -56,18 +56,20 @@ Optional:
 
 ## Local setup
 
+The toolchain (Python, uv, ruff, prettier, just) comes from the flake. Enter the
+dev shell first:
+
 ```bash
-uv sync --dev
-npm install
-uv run litestar database upgrade --no-prompt
-uv run python -m together create-user <username>
-just dev
+nix develop
 ```
 
-To install both toolchains through the task runner:
+Then:
 
 ```bash
 just setup
+uv run litestar database upgrade --no-prompt
+uv run python -m together create-user <username>
+just dev
 ```
 
 To run the test suite:
