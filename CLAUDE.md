@@ -19,9 +19,8 @@ affairs discussions, restaurant visits, and journaling. It uses a modular
 architecture where each feature (current affairs, eats, journal) is a separate
 module with sub-routes.
 
-This is a **purely personal** app. While this is in production and actively
-used, it is not meant to be sold as a product or used by anyone other than its
-creators.
+This is a **purely personal** app. It is not meant to be sold as a product or
+used by anyone other than its creators.
 
 ## Tech Stack
 
@@ -34,15 +33,24 @@ creators.
 
 ## Commands
 
+All tooling (Python, uv, ruff, prettier, just) comes from the flake's dev shell.
+Run commands inside it, e.g. `nix develop -c <command>`.
+
 ```bash
-# Install dependencies 
-uv sync
+# Install dependencies
+uv sync --dev
 
-# Run the development server 
-uv run litestar run --reload
+# Run the development server
+just dev
 
-# Run a specific Python file 
-uv run python <file.py> 
+# Lint and format
+just lint
+
+# Lint, format check, and tests
+just check
+
+# Run a specific Python file
+uv run python <file.py>
 ```
 
 ## Coding Guidelines

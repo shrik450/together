@@ -117,14 +117,25 @@ This keeps the UI/content separation clean:
 ```python
 from framework.ui import PageAction
 
+
 @get("/journal/123")
 async def journal_entry() -> Template:
     return Template(
         template_name="journal/entry.html",
         context={
             "actions": [
-                PageAction(label="Discard", href="/journal/123/discard", style="secondary", method="post"),
-                PageAction(label="Publish", href="/journal/123/publish", style="primary", method="post"),
+                PageAction(
+                    label="Discard",
+                    href="/journal/123/discard",
+                    style="secondary",
+                    method="post",
+                ),
+                PageAction(
+                    label="Publish",
+                    href="/journal/123/publish",
+                    style="primary",
+                    method="post",
+                ),
             ],
         },
     )
@@ -151,11 +162,12 @@ the shell renders appropriately for each viewport.
 ```python
 from framework.ui import NavNode
 
+
 @dataclass
 class NavNode:
     label: str
-    href: str | None = None   # None = current page
-    icon: str | None = None   # Optional, any node can have one
+    href: str | None = None  # None = current page
+    icon: str | None = None  # Optional, any node can have one
 ```
 
 **Context variable:**
@@ -225,7 +237,7 @@ Full stack: `[[Home, /]], [[Current Affairs]]` → Breadcrumb: `Home > Current A
 **Example - deeper hierarchy** (`/eats/123/visit/456`):
 
 ```python
-context={
+context = {
     "nav_stack": [
         [
             NavNode(label="Katz's Deli", href="/eats/123/"),

@@ -93,11 +93,12 @@ each level is a list of `NavNode`s). See `docs/ui_design.md` for full details.
 ```python
 from framework.ui import NavNode
 
+
 @dataclass
 class NavNode:
     label: str
-    href: str | None = None   # None = current page
-    icon: str | None = None   # Optional
+    href: str | None = None  # None = current page
+    icon: str | None = None  # Optional
 ```
 
 Handlers pass these to templates via context:
@@ -264,14 +265,19 @@ from modules.current_affairs.models import Entry, Settings
 
 DAILY_BRIEFING = ScheduleRef("current-affairs-daily-briefing")
 
+
 def register():
-    add_schedule(ScheduleDefinition(
-        ref=DAILY_BRIEFING,
-        func=generate_briefing,
-        cron="0 7 * * *",
-        timezone="America/New_York",
-    ))
-    register_nav_node(NavNode(label="Current Affairs", href="/current-affairs/", icon="newspaper"))
+    add_schedule(
+        ScheduleDefinition(
+            ref=DAILY_BRIEFING,
+            func=generate_briefing,
+            cron="0 7 * * *",
+            timezone="America/New_York",
+        )
+    )
+    register_nav_node(
+        NavNode(label="Current Affairs", href="/current-affairs/", icon="newspaper")
+    )
 ```
 
 ---

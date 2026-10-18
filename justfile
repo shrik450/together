@@ -4,22 +4,21 @@ set shell := ["bash", "-cu"]
 default:
     @just --list
 
-# Install Python and frontend tooling.
+# Install Python dependencies.
 setup:
     uv sync --dev
-    npm install
 
 # Fix Python lint issues and format repo-owned source files.
 lint:
-    uv run ruff check --fix .
-    uv run ruff format .
-    npm exec -- prettier --write templates modules static
+    ruff check --fix .
+    ruff format .
+    prettier --write templates modules static
 
 # Check Python lint and formatting without modifying files.
 check:
-    uv run ruff check .
-    uv run ruff format --check .
-    npm exec -- prettier --check templates modules static
+    ruff check .
+    ruff format --check .
+    prettier --check templates modules static
     uv run pytest
 
 # Run the test suite.
