@@ -24,6 +24,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Any
+from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler import AsyncScheduler, CoalescePolicy, ConflictPolicy, Schedule
@@ -160,6 +161,20 @@ class SchedulerService:
             kwargs=job_kwargs,
             metadata=_app_metadata(ref),
         )
+
+    async def enqueue(
+        self, func: Callable[..., object], /, *args: object, **kwargs: object
+    ) -> UUID:
+        """Queue a one-off job without waiting for it.
+
+        The job's return value is discarded; jobs record their own outcome.
+        """
+        _validate_callable(func)
+        job_id = await self._scheduler.add_job(func, args=args, kwargs=kwargs)
+        self._logger.info(
+            "Queued job", extra={"job_id": str(job_id), "task_id": _task_id(func)}
+        )
+        return job_id
 
 
 _registry: dict[str, ScheduleDefinition] = {}
