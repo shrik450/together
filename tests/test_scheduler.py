@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from types import SimpleNamespace
 
@@ -348,6 +349,25 @@ class TestSchedulerRuntime:
             service = get_scheduler_service(litestar_app)
             with pytest.raises(ValueError, match="Unknown schedule ref"):
                 await service.run_now(ScheduleRef("missing-job"))
+
+    async def test_enqueue_runs_job_in_background(self, litestar_app) -> None:
+        async with scheduler_lifespan(litestar_app):
+            service = get_scheduler_service(litestar_app)
+            await service.enqueue(scheduler_test_task, "queued", answer=1)
+
+            async with asyncio.timeout(10):
+                while not get_scheduler_task_calls():
+                    await asyncio.sleep(0.05)
+
+        assert list(get_scheduler_task_calls()) == [
+            {"args": ("queued",), "kwargs": {"answer": 1}}
+        ]
+
+    async def test_enqueue_rejects_lambda(self, litestar_app) -> None:
+        async with scheduler_lifespan(litestar_app):
+            service = get_scheduler_service(litestar_app)
+            with pytest.raises(ValueError, match="must not be lambdas"):
+                await service.enqueue(lambda: None)
 
 
 class TestSchedulerService:
