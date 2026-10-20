@@ -57,6 +57,32 @@ References:
 
 - [APScheduler 4.x User Guide](https://apscheduler.readthedocs.io/en/master/userguide.html)
 
+### Pydantic AI
+
+- **Version**: 2.x via `pydantic-ai-slim` with the Anthropic, OpenAI and Google
+  extras
+- **Agents**: Plain Pydantic AI `Agent`s, defined at module level with a `name`
+  and no model; `framework.llm.run_agent` supplies the model for a role
+- **Output**: Use dataclasses as `output_type`, like the rest of the codebase
+- **Web access**: Use `framework.llm.web_toolset`, not provider-hosted web
+  tools, so agents behave the same whichever provider runs them
+
+References:
+
+- [Pydantic AI](https://pydantic.dev/docs/ai/)
+
+### Zendriver
+
+- **Purpose**: Drives a real Chromium for `framework.browser`, talking to it
+  directly over the DevTools protocol rather than through Playwright or
+  webdriver, which many sites detect and block
+- **Browser**: Chromium from the flake (nixpkgs); Zendriver itself is pure
+  Python and installed by uv
+
+References:
+
+- [Zendriver](https://github.com/cdpdriver/zendriver)
+
 ### Jinja2 & HTMX
 
 - **Templates**: Configured via `TemplateConfig` with `JinjaTemplateEngine`
@@ -151,9 +177,11 @@ together/
 ├── framework/             # Shared infrastructure
 │   ├── __init__.py
 │   ├── auth/              # User auth, sessions
+│   ├── browser/           # Chromium for reading web pages
 │   ├── db/                # Database config, Base class, async DB helpers
+│   ├── llm/               # Model roles, agent runs, web tools
 │   ├── ui.py              # PageAction, NavNode, register_nav_node()
-│   └── scheduler/         # APScheduler setup
+│   └── scheduler/         # APScheduler setup, queued jobs
 ├── modules/               # Feature modules
 │   ├── __init__.py
 │   └── home/
@@ -171,7 +199,8 @@ modules/current_affairs/
 ├── handlers.py            # Route handler functions
 ├── models.py              # SQLAlchemy models
 ├── services.py            # Business logic (optional, for complex logic)
-├── jobs.py                # Scheduled job functions
+├── jobs.py                # Scheduled and queued job functions
+├── llm.py                 # Agents and their output types
 └── templates/
     └── current_affairs/   # Module-specific templates
 ```
@@ -235,6 +264,80 @@ Uses APScheduler 4.x `AsyncScheduler` with lifespan integration:
 - Use `ConflictPolicy.replace` to handle app restarts gracefully
 - The scaffold provides the scheduler boundary and registration API; no
   application schedules are registered yet
+
+**Queued jobs:** `SchedulerService.enqueue(func, *args, **kwargs)` queues a
+one-off job and returns without waiting. Use it for work that must outlive a
+request, such as an LLM run whose result is saved.
+
+- `func` must be an importable module-level function, as for schedules
+- Pass ids and plain values, not ORM objects; arguments are serialized into
+  APScheduler's tables
+- The job's return value is discarded. The job records its own outcome on the
+  module's records (e.g. a proposal's status)
+- A job queued while the app is down runs when it starts. A job interrupted by
+  a restart is **not** rerun, so modules must be able to tell that work was
+  left unfinished (e.g. a proposal still "in progress" long after it was
+  queued) and offer a retry
+
+### Browser (framework/browser/)
+
+A single Chromium, shared by the whole app, for reading web pages:
+
+- `get_browser_service()` returns the app's `BrowserService`;
+  `browser_lifespan` owns it
+- `fetch(url)` returns a `Page`: the final URL after redirects, title, main
+  text as Markdown (via trafilatura), JSON-LD structured data, and links
+- `search(query)` runs a Google search and returns the results page's text and
+  result links. Google's own panels, such as a place's address and hours, are
+  part of the text. A blocked search raises `SearchBlockedError`
+- The browser starts on first use and closes after a few idle minutes. It keeps
+  a persistent profile in `browser-profile/` next to the database, so cookies
+  and consent choices survive
+- Requests to private, loopback and link-local addresses are refused, for the
+  requested URL and the final URL, because callers (including LLMs) choose the
+  URLs and the app runs on a home server
+- Headless Chromium's user agent is replaced with a regular desktop one
+
+### LLM (framework/llm/)
+
+Modules define Pydantic AI agents and run them with `run_agent`:
+
+```python
+from pydantic_ai import Agent
+
+from framework.llm import ModelRole, run_agent, web_toolset
+
+capture_agent = Agent(
+    name="eats.capture",
+    output_type=CaptureProposal,
+    instructions=CAPTURE_INSTRUCTIONS,
+    toolsets=[web_toolset],
+)
+
+result = await run_agent(capture_agent, [text, receipt], deps=None)
+result.output  # CaptureProposal
+result.run_id  # the run's LlmRun row
+```
+
+- **Model roles:** `ModelRole.default` and `ModelRole.fast` map to models in
+  code, and `TOGETHER_LLM_MODEL_<ROLE>` overrides either. Feature code names a
+  role, never a provider or model. API keys come from each provider's own
+  environment variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+  `GOOGLE_API_KEY`)
+- **Run records:** every run writes an `LlmRun` row: agent, model, status,
+  requests, tokens, best-effort cost, error, and messages. Runs can be long, so
+  records use their own sessions. Images and other files in the prompt are
+  replaced with a note before the messages are stored
+- **Failures:** a failed run is recorded and raised as `AgentRunFailed`, which
+  carries its `run_id`. The module decides what failure means for its records
+- **Limits:** runs default to at most 30 model requests; pass `usage_limits`
+  to change that
+- **Where runs happen:** run an agent in a queued job when its result is saved
+  (capture, briefings), and inside the request when someone is waiting on an
+  answer that isn't saved
+- **Web tools:** `web_toolset` gives agents `search_web` and `fetch_page`,
+  backed by `framework.browser`. Its instructions tell the model page content
+  is untrusted
 
 ---
 

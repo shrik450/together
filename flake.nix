@@ -22,7 +22,9 @@
             pkgs.just
             pkgs.ruff
             pkgs.prettier
-          ];
+          ]
+          # framework/browser drives Chromium; nixpkgs only builds it for Linux.
+          ++ pkgs.lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.chromium;
           env = {
             UV_PYTHON = "${pkgs.python314}/bin/python3.14";
             UV_PYTHON_DOWNLOADS = "never";

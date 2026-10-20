@@ -4,23 +4,33 @@ import asyncio
 import importlib
 import os
 import sys
+import threading
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from datetime import timedelta
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+import pydantic_ai.models
 import pytest
 from litestar.testing import AsyncTestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import framework.browser.service as browser_service_module
 import framework.scheduler.service as scheduler_service_module
 import framework.ui as ui_module
 from framework.auth.models import User
 from framework.auth.session import get_session_config
+from framework.browser import BrowserConfig, BrowserService
 from framework.db import Base, create_db_config, get_async_engine, open_async_session
-from tests.helpers import reset_scheduler_task_calls
+from tests.helpers import WebFixtureHandler, reset_scheduler_task_calls
 
 TEST_SECRET_KEY = "0123456789abcdef0123456789abcdef"
+
+# Tests must swap in fake models with `agent.override`; a real model request
+# fails instead of reaching a provider.
+pydantic_ai.models.ALLOW_MODEL_REQUESTS = False
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -88,6 +98,34 @@ async def client(
 ) -> AsyncIterator[AsyncTestClient[Any]]:
     async with AsyncTestClient(litestar_app) as test_client:
         yield test_client
+
+
+@pytest.fixture(scope="session")
+def web_server_url() -> Iterator[str]:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), WebFixtureHandler)
+    server.daemon_threads = True
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_port}"
+    server.shutdown()
+
+
+@pytest.fixture
+async def browser_service(
+    tmp_path: Path, web_server_url: str
+) -> AsyncIterator[BrowserService]:
+    service = BrowserService(
+        BrowserConfig(
+            profile_dir=tmp_path / "browser-profile",
+            allow_private_networks=True,
+            search_url=f"{web_server_url}/search",
+            page_timeout=timedelta(seconds=10),
+        )
+    )
+    browser_service_module._service = service
+    yield service
+    browser_service_module._service = None
+    await service.close()
 
 
 @pytest.fixture
