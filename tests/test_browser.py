@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import asyncio
+import dataclasses
 from datetime import timedelta
+from ipaddress import ip_address
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
+from pydantic import TypeAdapter
 
 from framework.browser import (
     BlockedUrlError,
@@ -13,17 +18,16 @@ from framework.browser import (
     Link,
     SearchBlockedError,
 )
-from framework.browser.service import (
-    is_public_address,
-    is_search_blocked,
-    parse_json_ld,
-    search_result_links,
-)
+from framework.browser.chromium import Chromium
+from framework.browser.network import is_allowed_address, parse_address
+from framework.browser.page import parse_json_ld
+from framework.browser.search import is_search_blocked, search_result_links
+from tests.helpers import RecordingHandler
 
 
-class TestAddressChecks:
+class TestAddressPolicy:
     @pytest.mark.parametrize(
-        ("address", "public"),
+        ("address", "allowed"),
         [
             ("93.184.215.14", True),
             ("2606:4700::6810:85e5", True),
@@ -39,22 +43,16 @@ class TestAddressChecks:
             ("::ffff:192.168.1.1", False),
         ],
     )
-    def test_is_public_address(self, address: str, public: bool) -> None:
-        assert is_public_address(address) is public
-
-    @pytest.mark.parametrize(
-        "url",
-        ["http://127.0.0.1/", "http://localhost:8000/", "file:///etc/passwd", "/x"],
-    )
-    async def test_refuses_non_public_urls_without_starting_browser(
-        self, tmp_path: Path, url: str
+    def test_only_public_addresses_are_allowed(
+        self, address: str, allowed: bool
     ) -> None:
-        service = BrowserService(BrowserConfig(profile_dir=tmp_path / "profile"))
+        assert is_allowed_address(parse_address(address), frozenset()) is allowed
 
-        with pytest.raises(BlockedUrlError):
-            await service.fetch(url)
+    def test_private_addresses_can_be_allowed_one_by_one(self) -> None:
+        allowed = frozenset({ip_address("127.0.0.1")})
 
-        assert not (tmp_path / "profile").exists()
+        assert is_allowed_address(parse_address("127.0.0.1"), allowed)
+        assert not is_allowed_address(parse_address("127.0.0.2"), allowed)
 
 
 class TestSearchResults:
@@ -93,6 +91,23 @@ class TestSearchResults:
         )
 
 
+class TestChromium:
+    async def test_page_values_are_parsed_and_errors_become_browser_errors(
+        self, tmp_path: Path
+    ) -> None:
+        chromium = await Chromium.start(profile_dir=tmp_path / "profile", headless=True)
+        try:
+            tab = await chromium.open_tab()
+
+            assert await tab.evaluate("1 + 1", TypeAdapter(int)) == 2
+            with pytest.raises(BrowserError, match="Unexpected value"):
+                await tab.evaluate("'two'", TypeAdapter(int))
+            with pytest.raises(BrowserError, match="Reading the page failed"):
+                await tab.evaluate("throw new Error('boom')", TypeAdapter(int))
+        finally:
+            await chromium.stop()
+
+
 class TestBrowserFetch:
     async def test_fetch_reads_main_text_structured_data_and_links(
         self, browser_service: BrowserService, web_server_url: str
@@ -129,13 +144,11 @@ class TestBrowserFetch:
         assert page.title == "Rendered"
         assert "chakapuli" in page.text
 
-    async def test_fetch_times_out(self, tmp_path: Path, web_server_url: str) -> None:
+    async def test_fetch_times_out(
+        self, browser_config: BrowserConfig, web_server_url: str
+    ) -> None:
         service = BrowserService(
-            BrowserConfig(
-                profile_dir=tmp_path / "profile",
-                allow_private_networks=True,
-                page_timeout=timedelta(seconds=1),
-            )
+            dataclasses.replace(browser_config, page_timeout=timedelta(seconds=1))
         )
         try:
             with pytest.raises(BrowserError, match="Timed out"):
@@ -143,27 +156,98 @@ class TestBrowserFetch:
         finally:
             await service.close()
 
-    async def test_browser_closes_when_idle_and_restarts_on_use(
-        self, tmp_path: Path, web_server_url: str
+    @pytest.mark.parametrize(
+        "browser_script",
+        [
+            pytest.param("exit 1", id="exits-immediately"),
+            pytest.param(
+                'if [ "$1" = --version ]; then echo "Chromium 1.0"; fi; exit 1',
+                id="starts-then-dies",
+            ),
+        ],
+    )
+    async def test_browser_failures_surface_as_browser_errors(
+        self,
+        browser_config: BrowserConfig,
+        web_server_url: str,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        browser_script: str,
+    ) -> None:
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        chromium = bin_dir / "chromium"
+        chromium.write_text(f"#!/bin/sh\n{browser_script}\n")
+        chromium.chmod(0o755)
+        monkeypatch.setenv("PATH", str(bin_dir))
+        service = BrowserService(browser_config)
+
+        with pytest.raises(BrowserError):
+            await service.fetch(f"{web_server_url}/restaurant")
+
+    async def test_browser_reopens_after_closing(
+        self, browser_config: BrowserConfig, web_server_url: str
     ) -> None:
         service = BrowserService(
-            BrowserConfig(
-                profile_dir=tmp_path / "profile",
-                allow_private_networks=True,
-                idle_timeout=timedelta(seconds=0.2),
-            )
+            dataclasses.replace(browser_config, idle_timeout=timedelta(seconds=0.1))
         )
         try:
             await service.fetch(f"{web_server_url}/restaurant")
-            assert service._browser is not None
-            assert service._idle_close is not None
-            await service._idle_close
-            assert service._browser is None
-
-            page = await service.fetch(f"{web_server_url}/restaurant")
-            assert page.title == "Saperavi"
+            await asyncio.sleep(0.5)
+            after_idle = await service.fetch(f"{web_server_url}/restaurant")
+            await service.close()
+            after_close = await service.fetch(f"{web_server_url}/restaurant")
         finally:
             await service.close()
+
+        assert after_idle.title == after_close.title == "Saperavi"
+
+
+class TestHomeNetworkProtection:
+    @pytest.mark.parametrize("url", ["file:///etc/passwd", "ftp://example.com/", "/x"])
+    async def test_refuses_non_web_urls_without_starting_browser(
+        self, browser_config: BrowserConfig, url: str
+    ) -> None:
+        service = BrowserService(browser_config)
+
+        with pytest.raises(BlockedUrlError):
+            await service.fetch(url)
+
+        assert not browser_config.profile_dir.exists()
+
+    async def test_refuses_pages_on_private_addresses(
+        self, browser_service: BrowserService, home_network_url: str
+    ) -> None:
+        with pytest.raises(BlockedUrlError, match="not on a public address"):
+            await browser_service.fetch(f"{home_network_url}/router")
+
+        assert RecordingHandler.requests == []
+
+    async def test_refuses_redirects_to_private_addresses(
+        self,
+        browser_service: BrowserService,
+        web_server_url: str,
+        home_network_url: str,
+    ) -> None:
+        target = quote(f"{home_network_url}/reboot", safe="")
+
+        with pytest.raises(BlockedUrlError, match="not on a public address"):
+            await browser_service.fetch(f"{web_server_url}/redirect-to?url={target}")
+
+        assert RecordingHandler.requests == []
+
+    async def test_blocks_page_resources_on_private_addresses(
+        self,
+        browser_service: BrowserService,
+        web_server_url: str,
+        home_network_url: str,
+    ) -> None:
+        src = quote(f"{home_network_url}/pixel.png", safe="")
+
+        page = await browser_service.fetch(f"{web_server_url}/embed?src={src}")
+
+        assert page.title == "Embeds"
+        assert RecordingHandler.requests == []
 
 
 class TestBrowserSearch:
@@ -179,13 +263,11 @@ class TestBrowserSearch:
         )
 
     async def test_search_raises_when_blocked(
-        self, tmp_path: Path, web_server_url: str
+        self, browser_config: BrowserConfig, web_server_url: str
     ) -> None:
         service = BrowserService(
-            BrowserConfig(
-                profile_dir=tmp_path / "profile",
-                allow_private_networks=True,
-                search_url=f"{web_server_url}/sorry/index",
+            dataclasses.replace(
+                browser_config, google_search_url=f"{web_server_url}/sorry/index"
             )
         )
         try:

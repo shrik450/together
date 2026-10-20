@@ -293,9 +293,16 @@ A single Chromium, shared by the whole app, for reading web pages:
 - The browser starts on first use and closes after a few idle minutes. It keeps
   a persistent profile in `browser-profile/` next to the database, so cookies
   and consent choices survive
-- Requests to private, loopback and link-local addresses are refused, for the
-  requested URL and the final URL, because callers (including LLMs) choose the
-  URLs and the app runs on a home server
+- Every request a tab makes (the page, its redirects, and its images, scripts
+  and frames) is paused through the DevTools `Fetch` domain and only continues
+  if its host resolves to public addresses (`network.py`). Callers, including
+  LLMs, choose the URLs, and the app runs on a home server. Known limits: a
+  host that resolves differently for Chromium than for us (DNS rebinding), and
+  requests from web workers and WebSockets, are not checked
+- `chromium.py` is the only module that touches Zendriver. It runs the
+  Chromium process itself (Zendriver's launcher leaks pipes), parses every
+  value read from a page into a declared type, and raises every failure as a
+  `BrowserError`
 - Headless Chromium's user agent is replaced with a regular desktop one
 
 ### LLM (framework/llm/)

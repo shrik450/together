@@ -4,7 +4,7 @@ import html
 import time
 from collections.abc import Mapping, Sequence
 from http.server import BaseHTTPRequestHandler
-from typing import Any
+from typing import Any, ClassVar, override
 from urllib.parse import parse_qs, urlsplit
 
 _scheduler_task_calls: list[dict[str, Any]] = []
@@ -79,6 +79,12 @@ SEARCH_PAGE = """<!doctype html>
 """
 
 
+EMBED_PAGE = """<!doctype html>
+<html><head><title>Embeds</title></head>
+<body><p>A page with an image from elsewhere.</p><img src="{src}"></body></html>
+"""
+
+
 class WebFixtureHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parts = urlsplit(self.path)
@@ -87,9 +93,12 @@ class WebFixtureHandler(BaseHTTPRequestHandler):
         elif parts.path == "/scripted":
             self._send_html(SCRIPTED_PAGE)
         elif parts.path == "/redirect":
-            self.send_response(302)
-            self.send_header("Location", "/restaurant")
-            self.end_headers()
+            self._redirect("/restaurant")
+        elif parts.path == "/redirect-to":
+            self._redirect(parse_qs(parts.query)["url"][0])
+        elif parts.path == "/embed":
+            src = html.escape(parse_qs(parts.query)["src"][0])
+            self._send_html(EMBED_PAGE.format(src=src))
         elif parts.path == "/search":
             query = parse_qs(parts.query).get("q", [""])[0]
             self._send_html(SEARCH_PAGE.format(query=html.escape(query)))
@@ -101,6 +110,11 @@ class WebFixtureHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
+    def _redirect(self, location: str) -> None:
+        self.send_response(302)
+        self.send_header("Location", location)
+        self.end_headers()
+
     def _send_html(self, body: str) -> None:
         encoded = body.encode()
         self.send_response(200)
@@ -109,5 +123,22 @@ class WebFixtureHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
+    @override
+    def log_message(self, format: str, *args: Any) -> None:
+        return
+
+
+class RecordingHandler(BaseHTTPRequestHandler):
+    """Stands in for a device on the home network and records every request."""
+
+    requests: ClassVar[list[str]] = []
+
+    def do_GET(self) -> None:
+        self.requests.append(self.path)
+        self.send_response(200)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    @override
     def log_message(self, format: str, *args: Any) -> None:
         return
