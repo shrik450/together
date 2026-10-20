@@ -35,8 +35,8 @@ used by anyone other than its creators.
 
 ## Commands
 
-All tooling (Python, uv, ruff, prettier, just, Chromium) comes from the
-flake's dev shell.
+All tooling (Python, uv, ruff, prettier, basedpyright, just, Chromium) comes
+from the flake's dev shell.
 Run commands inside it, e.g. `nix develop -c <command>`.
 
 ```bash
@@ -49,14 +49,22 @@ just dev
 # Lint and format
 just lint
 
-# Lint, format check, and tests
+# Lint, format check, type check, and tests
 just check
+
+# Type check only (basedpyright)
+just typecheck
 
 # Run a specific Python file
 uv run python <file.py>
 ```
 
 ## Coding Guidelines
+
+- Wrap untyped libraries in one typed module each, which parses values coming
+  out of the library into declared types and turns its errors into ours. Don't
+  let `Any` spread past that module. See "Type Checking" in
+  `docs/architecture.md`.
 
 - Always use `uv` for all Python or python related commands.
 - Default to `async def` for request handlers and dependencies, even when they do

@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import pytest
 from itsdangerous import URLSafeTimedSerializer
+from litestar import Request
+from litestar.datastructures import State
 from litestar.response import Redirect, Response, Template
 from litestar.testing import RequestFactory
+from litestar.types import HTTPRequestEvent
 
 from framework.auth.dependencies import get_current_user_template, provide_current_user
 from framework.auth.guards import AuthRequired, auth_required_handler, require_auth
 from framework.auth.handlers import login_page, logout
-from framework.auth.middleware import AuthenticatedUser, SessionMiddleware
+from framework.auth.middleware import SessionMiddleware
 from framework.auth.session import (
     create_session_cookie,
     get_session_config,
@@ -18,6 +19,7 @@ from framework.auth.session import (
     normalize_next_url,
     parse_session_cookie,
 )
+from framework.auth.state import AuthenticatedUser
 from framework.db import open_async_session
 
 
@@ -42,10 +44,9 @@ def _set_session_env(
 
 def _make_connection(
     path: str, query: str = "", user_id: int | None = None
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        url=SimpleNamespace(path=path, query=query),
-        state={"user_id": user_id},
+) -> Request[object, object, State]:
+    return RequestFactory().get(
+        f"{path}?{query}" if query else path, state={"user_id": user_id}
     )
 
 
@@ -158,21 +159,21 @@ class TestAuthGuard:
         "path", ["/auth/login", "/auth/logout", "/static/style.css"]
     )
     def test_exempt_paths_bypass_auth(self, path: str) -> None:
-        require_auth(_make_connection(path), object())
+        require_auth(_make_connection(path), login_page)
 
     def test_authenticated_request_passes(self) -> None:
-        require_auth(_make_connection("/", user_id=1), object())
+        require_auth(_make_connection("/", user_id=1), login_page)
 
     def test_unauthenticated_request_raises_with_safe_next_url(self) -> None:
         connection = _make_connection("/journal", query="page=2")
 
         with pytest.raises(AuthRequired) as exc_info:
-            require_auth(connection, object())
+            require_auth(connection, login_page)
 
         assert exc_info.value.redirect_to == "/auth/login?next=/journal%3Fpage%3D2"
 
     def test_auth_required_handler_returns_htmx_redirect(self) -> None:
-        request = SimpleNamespace(headers={"HX-Request": "true"})
+        request = RequestFactory().get("/", headers={"HX-Request": "true"})
 
         response = auth_required_handler(request, AuthRequired("/auth/login?next=/"))
 
@@ -180,7 +181,7 @@ class TestAuthGuard:
         assert response.headers["HX-Redirect"] == "/auth/login?next=/"
 
     def test_auth_required_handler_returns_normal_redirect(self) -> None:
-        request = SimpleNamespace(headers={})
+        request = RequestFactory().get("/")
 
         response = auth_required_handler(request, AuthRequired("/auth/login?next=/"))
 
@@ -278,19 +279,19 @@ class TestAuthMiddleware:
             await send({"type": "http.response.start", "status": 204, "headers": []})
             await send({"type": "http.response.body", "body": b""})
 
-        middleware = SessionMiddleware(terminal_app)
+        app = SessionMiddleware()(terminal_app)
         request = RequestFactory().get(
             "/",
             cookies=None if cookie is None else f"session={cookie}",
         )
 
-        async def receive() -> dict[str, str]:
-            return {"type": "http.request"}
+        async def receive() -> HTTPRequestEvent:
+            return {"type": "http.request", "body": b"", "more_body": False}
 
         async def send(_message) -> None:
             return None
 
-        await middleware(request.scope, receive, send)
+        await app(request.scope, receive, send)
         return captured
 
     async def test_anonymous_request_stays_anonymous(self) -> None:

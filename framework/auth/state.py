@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
-from litestar.connection import ASGIConnection
+from litestar.datastructures import State
 from litestar.types import Scope
 
 _USER_ID_KEY = "user_id"
@@ -34,10 +33,10 @@ def set_authenticated_user(scope: Scope, user: AuthenticatedUser) -> None:
     state[_CURRENT_USER_KEY] = user
 
 
-def get_auth_user_id(connection: ASGIConnection) -> int | None:
+def get_auth_user_id(state: State) -> int | None:
     """Contain the untyped Litestar state boundary in one validated accessor."""
 
-    value = connection.state.get(_USER_ID_KEY)
+    value: object = state.get(_USER_ID_KEY)
     if value is None:
         return None
     if not isinstance(value, int):
@@ -45,10 +44,10 @@ def get_auth_user_id(connection: ASGIConnection) -> int | None:
     return value
 
 
-def get_authenticated_user(connection: ASGIConnection) -> AuthenticatedUser | None:
+def get_authenticated_user(state: State) -> AuthenticatedUser | None:
     """Contain the untyped Litestar state boundary in one validated accessor."""
 
-    value = connection.state.get(_CURRENT_USER_KEY)
+    value: object = state.get(_CURRENT_USER_KEY)
     if value is None:
         return None
     if not isinstance(value, AuthenticatedUser):
@@ -58,8 +57,6 @@ def get_authenticated_user(connection: ASGIConnection) -> AuthenticatedUser | No
     return value
 
 
-def _get_scope_state(scope: Scope) -> dict[str, Any]:
-    state = scope.setdefault("state", {})
-    if not isinstance(state, dict):
-        raise TypeError("Expected ASGI scope state to be a dict")
-    return state
+def _get_scope_state(scope: Scope) -> dict[str, object]:
+    # Litestar sets the state on every scope before middleware runs.
+    return scope["state"]

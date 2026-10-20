@@ -352,6 +352,23 @@ result.run_id  # the run's LlmRun row
 
 ---
 
+## Type Checking
+
+basedpyright runs in its `recommended` mode as part of `just check`
+(`just typecheck` runs it alone), with failures on warnings. Settings live in
+`pyproject.toml`. Style rules that ruff already covers are off, and tests may
+use untyped fixtures and private names.
+
+Untyped values from libraries (`Any`) don't spread into our code. Each untyped
+library gets one typed module that owns it (`framework/browser/chromium.py` for
+Zendriver, `framework/auth/session.py` for itsdangerous,
+`framework/scheduler/service.py` for APScheduler). The module parses values
+coming out of the library into declared types, using Pydantic or pattern
+matching, and turns the library's errors into ours. JSON is parsed into
+`framework.json_value.JsonValue`.
+
+---
+
 ## Module Registration
 
 Modules are registered explicitly in `app.py`. Full feature modules are

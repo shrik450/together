@@ -22,6 +22,7 @@
             pkgs.just
             pkgs.ruff
             pkgs.prettier
+            pkgs.basedpyright
           ]
           # framework/browser drives Chromium; nixpkgs only builds it for Linux.
           ++ pkgs.lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.chromium;

@@ -36,3 +36,37 @@ target-version = "py314"
 [tool.ruff.lint.per-file-ignores]
 # Litestar's migration template prefixes filenames with the date.
 "migrations/versions/*" = ["N999"]
+
+[tool.basedpyright]
+pythonVersion = "3.14"
+venvPath = "."
+venv = ".venv"
+include = ["app.py", "framework", "modules", "together", "tests"]
+typeCheckingMode = "recommended"
+failOnWarnings = true
+# Style rules that ruff or our conventions already cover.
+reportUnusedCallResult = "none"
+reportImplicitStringConcatenation = "none"
+reportUnannotatedClassAttribute = "none"
+reportUnusedParameter = "none"
+reportMissingSuperCall = "none"
+# SQLAlchemy's declarative columns are set by the ORM, not in `__init__`.
+reportUninitializedInstanceVariable = "none"
+
+[[tool.basedpyright.executionEnvironments]]
+# Tests use untyped pytest fixtures and reach into framework internals to
+# reset state; they still get full type-error checking.
+root = "tests"
+extraPaths = ["."]
+reportAny = "none"
+reportExplicitAny = "none"
+reportUnknownMemberType = "none"
+reportUnknownParameterType = "none"
+reportUnknownArgumentType = "none"
+reportUnknownVariableType = "none"
+reportUnknownLambdaType = "none"
+reportMissingParameterType = "none"
+reportPrivateUsage = "none"
+
+[[tool.basedpyright.executionEnvironments]]
+root = "."

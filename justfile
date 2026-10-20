@@ -14,12 +14,17 @@ lint:
     ruff format .
     prettier --write templates modules static
 
-# Check Python lint and formatting without modifying files.
+# Check lint, formatting and types, then run the tests, without modifying files.
 check:
     ruff check .
     ruff format --check .
     prettier --check templates modules static
+    basedpyright
     uv run pytest
+
+# Type-check the project.
+typecheck:
+    basedpyright
 
 # Run the test suite.
 test:

@@ -63,8 +63,8 @@ Optional:
 
 ## Local setup
 
-The toolchain (Python, uv, ruff, prettier, just, Chromium) comes from the
-flake. Enter the
+The toolchain (Python, uv, ruff, prettier, basedpyright, just, Chromium) comes
+from the flake. Enter the
 dev shell first:
 
 ```bash

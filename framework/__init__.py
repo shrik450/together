@@ -1,21 +1,17 @@
+from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from litestar.types import PathType
-
-_template_dirs: list[PathType] = [Path("templates")]
+_template_dirs: list[Path] = [Path("templates")]
 
 
-def register_template_dirs(*paths: PathType) -> None:
+def register_template_dirs(*paths: Path | str) -> None:
     """Register additional template directories for module-owned templates."""
-    for path in paths:
-        resolved = Path(path)
-        if not resolved.is_dir():
+    for path in map(Path, paths):
+        if not path.is_dir():
             raise ValueError(f"Template directory does not exist: {path}")
         if path not in _template_dirs:
             _template_dirs.append(path)
 
 
-def get_template_dirs() -> list[PathType]:
-    return _template_dirs.copy()
+def get_template_dirs() -> Sequence[Path]:
+    return tuple(_template_dirs)
