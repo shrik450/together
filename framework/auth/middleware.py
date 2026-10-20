@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import override
 
 from litestar import Request
+from litestar.datastructures import State
 from litestar.middleware import ASGIMiddleware
 from litestar.types import ASGIApp, Receive, Scope, Send
 from sqlalchemy import select
@@ -17,6 +18,10 @@ from framework.auth.state import (
 from framework.db import open_async_session
 
 
+def _is_static_path(scope: Scope) -> bool:
+    return scope["path"].startswith("/static")
+
+
 class SessionMiddleware(ASGIMiddleware):
     """Load auth state from the signed session cookie into request.state.
 
@@ -25,46 +30,32 @@ class SessionMiddleware(ASGIMiddleware):
     session when needed.
     """
 
-    should_bypass_for_scope = staticmethod(
-        lambda scope: scope.get("path", "").startswith("/static")
-    )
+    should_bypass_for_scope = staticmethod(_is_static_path)
 
-    def __init__(self, app: ASGIApp | None = None, **kwargs: Any) -> None:
-        self._app = app
+    def __init__(self) -> None:
         self._session_config = get_session_config()
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        if "app" in kwargs and len(kwargs) == 1 and not args:
-            return super().__call__(kwargs["app"])
-        if len(args) == 1 and not kwargs:
-            return super().__call__(args[0])
-        if len(args) == 3 and not kwargs and self._app is not None:
-            scope, receive, send = args
-            return self.handle(scope, receive, send, self._app)
-        raise TypeError(
-            "SessionMiddleware expected either an app or ASGI call arguments"
-        )
-
+    @override
     async def handle(
         self, scope: Scope, receive: Receive, send: Send, next_app: ASGIApp
     ) -> None:
         initialize_auth_state(scope)
 
-        request = Request(scope, receive)
+        request: Request[object, object, State] = Request(scope, receive)
         cookie = request.cookies.get(self._session_config.cookie_name)
         if cookie:
             user_id = parse_session_cookie(cookie, self._session_config)
             if user_id is not None:
                 async with open_async_session() as session:
-                    user = (
+                    row = (
                         await session.execute(
                             select(User.id, User.username).where(User.id == user_id)
                         )
                     ).one_or_none()
-                if user is not None:
+                if row is not None:
+                    found_id, username = row
                     set_authenticated_user(
-                        scope,
-                        AuthenticatedUser(id=user.id, username=user.username),
+                        scope, AuthenticatedUser(id=found_id, username=username)
                     )
 
         await next_app(scope, receive, send)

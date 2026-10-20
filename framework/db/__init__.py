@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from advanced_alchemy.base import BigIntAuditBase
@@ -56,7 +56,7 @@ def get_async_engine() -> AsyncEngine:
 
 
 @asynccontextmanager
-async def open_async_session() -> AsyncIterator[AsyncSession]:
+async def open_async_session() -> AsyncGenerator[AsyncSession]:
     """Open an async database session for non-request code.
 
     Unlike request-scoped sessions managed by Litestar, callers are responsible

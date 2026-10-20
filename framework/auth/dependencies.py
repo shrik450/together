@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from litestar import Request
+from litestar.datastructures import State
 from litestar.di import NamedDependency
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,9 +16,9 @@ from framework.auth.state import (
 
 
 async def provide_current_user(
-    request: Request, db_session: NamedDependency[AsyncSession]
+    request: Request[object, object, State], db_session: NamedDependency[AsyncSession]
 ) -> User | None:
-    user_id = get_auth_user_id(request)
+    user_id = get_auth_user_id(request.state)
     if user_id is None:
         return None
     return await db_session.get(User, user_id)
@@ -28,7 +29,8 @@ def get_current_user_template(
 ) -> AuthenticatedUser | None:
     """Keep the template-context boundary typed before reading auth state."""
 
-    request = context.get("request")
-    if not isinstance(request, Request):
-        return None
-    return get_authenticated_user(request)
+    match context.get("request"):
+        case Request(state=State() as state):
+            return get_authenticated_user(state)
+        case _:
+            return None

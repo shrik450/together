@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import asyncio
 from datetime import timedelta
-from types import SimpleNamespace
 
 import pytest
 from apscheduler import AsyncScheduler
+from apscheduler._structures import MetadataType
 from apscheduler.datastores.sqlalchemy import SQLAlchemyDataStore
 
 import framework.scheduler.service as scheduler_service_module
@@ -106,7 +106,7 @@ class TestScheduleDefinitionValidation:
         assert definition.args == (1, 2)
         assert dict(definition.kwargs) == {"foo": "bar"}
         with pytest.raises(TypeError):
-            definition.kwargs["foo"] = "baz"  # type: ignore[index]
+            definition.kwargs["foo"] = "baz"  # pyright: ignore[reportIndexIssue]
 
     def test_rejects_lambda_callable(self) -> None:
         definition = ScheduleDefinition(
@@ -181,7 +181,7 @@ class TestSchedulerLifespan:
         func,
         cron: str = "0 7 * * *",
         args: tuple[object, ...] = (),
-        metadata: dict[str, str] | None = None,
+        metadata: MetadataType | None = None,
     ) -> None:
         data_store = SQLAlchemyDataStore(database_url)
         async with AsyncScheduler(data_store=data_store) as scheduler:
@@ -371,13 +371,6 @@ class TestSchedulerRuntime:
 
 
 class TestSchedulerService:
-    async def test_get_scheduler_service_reads_scope_state(self, litestar_app) -> None:
-        async with scheduler_lifespan(litestar_app):
-            direct_service = get_scheduler_service(litestar_app)
-            scope = SimpleNamespace(app=litestar_app)
-
-            assert get_scheduler_service(scope) is direct_service
-
     async def test_list_schedules_returns_sorted_infos(self, litestar_app) -> None:
         add_schedule(
             ScheduleDefinition(

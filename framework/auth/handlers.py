@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from litestar import Request, Router, get, post
+from litestar.datastructures import State
 from litestar.di import NamedDependency
 from litestar.enums import RequestEncodingType
 from litestar.params import Body
@@ -54,9 +55,9 @@ def _clear_session_cookie(response: Redirect) -> None:
 
 
 @get("/login")
-async def login_page(request: Request) -> Template | Redirect:
+async def login_page(request: Request[object, object, State]) -> Template | Redirect:
     next_url = normalize_next_url(request.query_params.get("next"))
-    if get_auth_user_id(request) is not None:
+    if get_auth_user_id(request.state) is not None:
         return Redirect(next_url)
     return Template(
         template_name="auth/login.html",

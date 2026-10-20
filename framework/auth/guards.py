@@ -4,6 +4,7 @@ from urllib.parse import quote
 
 from litestar import Request
 from litestar.connection import ASGIConnection
+from litestar.datastructures import State
 from litestar.handlers.base import BaseRouteHandler
 from litestar.response import Redirect, Response
 
@@ -22,7 +23,9 @@ def _is_exempt_path(path: str) -> bool:
     return path == "/static" or path.startswith("/static/")
 
 
-def _build_login_url(connection: ASGIConnection) -> str:
+def _build_login_url[HandlerT](
+    connection: ASGIConnection[HandlerT, object, object, State],
+) -> str:
     next_url = connection.url.path
     if connection.url.query:
         next_url = f"{next_url}?{connection.url.query}"
@@ -31,7 +34,9 @@ def _build_login_url(connection: ASGIConnection) -> str:
     return f"/auth/login?next={encoded_next}"
 
 
-def require_auth(connection: ASGIConnection, _: BaseRouteHandler) -> None:
+def require_auth[HandlerT](
+    connection: ASGIConnection[HandlerT, object, object, State], _: BaseRouteHandler
+) -> None:
     """Require an authenticated user for non-exempt routes.
 
     Guards signal unauthenticated access by raising `AuthRequired`; the app-level
@@ -43,13 +48,15 @@ def require_auth(connection: ASGIConnection, _: BaseRouteHandler) -> None:
     if _is_exempt_path(path):
         return
 
-    if get_auth_user_id(connection) is not None:
+    if get_auth_user_id(connection.state) is not None:
         return
 
     raise AuthRequired(redirect_to=_build_login_url(connection))
 
 
-def auth_required_handler(request: Request, exc: AuthRequired) -> Response | Redirect:
+def auth_required_handler(
+    request: Request[object, object, State], exc: AuthRequired
+) -> Response[None] | Redirect:
     if request.headers.get("HX-Request") == "true":
         return Response(
             content=None,

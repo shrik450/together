@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from typing import override
+
 from litestar.datastructures import MutableScopeHeaders
 from litestar.middleware import ASGIMiddleware
 from litestar.types import ASGIApp, Message, Receive, Scope, Send
 
 
 class SecurityHeadersMiddleware(ASGIMiddleware):
+    @override
     async def handle(
         self, scope: Scope, receive: Receive, send: Send, next_app: ASGIApp
     ) -> None:

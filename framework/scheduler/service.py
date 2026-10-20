@@ -17,13 +17,13 @@ from __future__ import annotations
 import inspect
 import logging
 import re
-from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any
+from typing import TYPE_CHECKING, cast
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -33,6 +33,10 @@ from apscheduler.triggers.cron import CronTrigger
 from litestar import Litestar
 
 from framework.db import get_database_url
+
+if TYPE_CHECKING:
+    # APScheduler doesn't export its metadata type publicly.
+    from apscheduler._structures import MetadataType
 
 LOGGER = logging.getLogger("together.scheduler")
 APSCHEDULER_LOGGER = LOGGER.getChild("runtime")
@@ -71,7 +75,7 @@ class ScheduleDefinition:
     cron: str
     timezone: str = "UTC"
     args: Sequence[object] = field(default_factory=tuple)
-    kwargs: Mapping[str, object] = field(default_factory=dict)
+    kwargs: Mapping[str, object] = field(default_factory=dict[str, object])
     paused: bool = False
     coalesce: CoalesceMode = CoalesceMode.latest
     misfire_grace_time: timedelta | None = _DEFAULT_MISFIRE_GRACE_TIME
@@ -146,7 +150,7 @@ class SchedulerService:
         *,
         args: Sequence[object] | None = None,
         kwargs: Mapping[str, object] | None = None,
-    ) -> Any:
+    ) -> object:
         definition = self._definitions.get(ref.id)
         if definition is None:
             raise ValueError(f"Unknown schedule ref: {ref.id}")
@@ -155,15 +159,19 @@ class SchedulerService:
         job_kwargs = dict(definition.kwargs if kwargs is None else kwargs)
 
         self._logger.info("Running schedule manually", extra={"schedule_id": ref.id})
-        return await self._scheduler.run_job(
-            definition.func,
-            args=job_args,
-            kwargs=job_kwargs,
-            metadata=_app_metadata(ref),
+        # The job's return value, whatever the function returned.
+        return cast(
+            object,
+            await self._scheduler.run_job(
+                definition.func,
+                args=job_args,
+                kwargs=job_kwargs,
+                metadata=_app_metadata(ref),
+            ),
         )
 
-    async def enqueue(
-        self, func: Callable[..., object], /, *args: object, **kwargs: object
+    async def enqueue[**P](
+        self, func: Callable[P, object], /, *args: P.args, **kwargs: P.kwargs
     ) -> UUID:
         """Queue a one-off job without waiting for it.
 
@@ -193,20 +201,17 @@ def add_schedule(definition: ScheduleDefinition) -> ScheduleRef:
     return definition.ref
 
 
-def get_scheduler_service(app_or_scope: Any) -> SchedulerService:
-    state = getattr(app_or_scope, "state", None)
-    if state is None:
-        app = getattr(app_or_scope, "app", None)
-        state = getattr(app, "state", None)
-
-    service = getattr(state, _STATE_KEY, None)
+def get_scheduler_service(app: Litestar) -> SchedulerService:
+    service: object = app.state.get(_STATE_KEY)
     if service is None:
         raise RuntimeError("Scheduler service is not available")
+    if not isinstance(service, SchedulerService):
+        raise TypeError(f"Expected a SchedulerService in app state, got {service!r}")
     return service
 
 
 @asynccontextmanager
-async def scheduler_lifespan(app: Litestar) -> AsyncIterator[None]:
+async def scheduler_lifespan(app: Litestar) -> AsyncGenerator[None]:
     """Own the scheduler lifecycle for the whole application.
 
     The scheduler gets its own engine against the same SQLite file so it can
@@ -226,21 +231,16 @@ async def scheduler_lifespan(app: Litestar) -> AsyncIterator[None]:
             await _reconcile_schedules(scheduler, definitions)
             await scheduler.start_in_background()
 
-            setattr(
-                app.state,
-                _STATE_KEY,
-                SchedulerService(
-                    scheduler=scheduler,
-                    definitions=definitions,
-                    logger=LOGGER,
-                ),
+            app.state[_STATE_KEY] = SchedulerService(
+                scheduler=scheduler,
+                definitions=definitions,
+                logger=LOGGER,
             )
             LOGGER.info("Scheduler started")
             try:
                 yield
             finally:
-                if hasattr(app.state, _STATE_KEY):
-                    delattr(app.state, _STATE_KEY)
+                app.state.pop(_STATE_KEY, None)
                 LOGGER.info("Stopping scheduler")
                 await scheduler.stop()
                 await scheduler.wait_until_stopped()
@@ -321,7 +321,7 @@ def _validate_schedule_definition(definition: ScheduleDefinition) -> None:
         ) from exc
 
 
-def _validate_callable(func: Any) -> None:
+def _validate_callable(func: object) -> None:
     if inspect.ismethod(func) or not inspect.isfunction(func):
         raise ValueError("Scheduled callables must be module-level functions")
     if func.__name__ == "<lambda>":
@@ -372,7 +372,7 @@ def _to_apscheduler_coalesce(mode: CoalesceMode) -> CoalescePolicy:
     }[mode]
 
 
-def _app_metadata(ref: ScheduleRef) -> dict[str, str]:
+def _app_metadata(ref: ScheduleRef) -> MetadataType:
     return {
         _APP_METADATA_KEY: _APP_METADATA_VALUE,
         "schedule_id": ref.id,
@@ -407,7 +407,7 @@ def _schedule_matches_definition(
             "second": "0",
             "timezone": definition.timezone,
         }
-        and tuple(schedule.args) == tuple(definition.args)
+        and cast(tuple[object, ...], schedule.args) == tuple(definition.args)
         and dict(schedule.kwargs) == dict(definition.kwargs)
         and schedule.paused is definition.paused
         and schedule.coalesce == _to_apscheduler_coalesce(definition.coalesce)

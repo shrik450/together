@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Literal, TypeGuard, cast
 from urllib.parse import urlparse
 
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -14,7 +15,7 @@ class SessionConfig:
     max_age_seconds: int
     cookie_name: str
     secure_cookies: bool
-    same_site: str
+    same_site: Literal["lax", "strict", "none"]
 
 
 def _parse_bool(value: str | None, default: bool) -> bool:
@@ -66,16 +67,24 @@ def create_session_cookie(user_id: int, config: SessionConfig) -> str:
 def parse_session_cookie(cookie: str, config: SessionConfig) -> int | None:
     serializer = _get_serializer(config)
     try:
-        data = serializer.loads(cookie, max_age=config.max_age_seconds)
+        payload = _load_payload(serializer, cookie, config.max_age_seconds)
     except BadSignature, SignatureExpired:
         return None
-    user_id = data.get("user_id")
-    if not isinstance(user_id, int):
-        return None
-    return user_id
+    match payload:
+        case {"user_id": int() as user_id}:
+            return user_id
+        case _:
+            return None
 
 
-def is_safe_redirect(url: str | None) -> bool:
+def _load_payload(
+    serializer: URLSafeTimedSerializer, cookie: str, max_age: int
+) -> object:
+    # itsdangerous returns whatever JSON the cookie held, typed as Any.
+    return cast(object, serializer.loads(cookie, max_age=max_age))
+
+
+def is_safe_redirect(url: str | None) -> TypeGuard[str]:
     """Allow only same-site relative redirects rooted at `/`."""
     if not url:
         return False

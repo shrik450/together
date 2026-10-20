@@ -8,8 +8,9 @@ own their own engine instances against the same SQLite file.
 from __future__ import annotations
 
 import os
+import sqlite3
 from pathlib import Path
-from typing import Any, TypedDict, Unpack
+from typing import TypedDict, Unpack
 
 from sqlalchemy import event
 from sqlalchemy.engine import make_url
@@ -36,7 +37,10 @@ def get_database_url() -> str:
     if url.drivername != "sqlite+aiosqlite":
         raise RuntimeError("TOGETHER_DATABASE_URL must use sqlite+aiosqlite")
 
-    if url.database in {None, "", ":memory:"} or not Path(url.database).is_absolute():
+    if (
+        url.database in {None, "", ":memory:"}
+        or not Path(url.database or "").is_absolute()
+    ):
         raise RuntimeError(
             "TOGETHER_DATABASE_URL must point to an absolute SQLite database path"
         )
@@ -44,32 +48,28 @@ def get_database_url() -> str:
     return database_url
 
 
-def get_sqlite_connection(dbapi_connection: Any):
+def get_sqlite_connection(dbapi_connection: object) -> sqlite3.Connection:
     # aiosqlite wraps the real sqlite3 connection behind two layers:
     # the DBAPI adapter's `driver_connection` holds the aiosqlite
     # Connection, whose `_conn` is the underlying sqlite3.Connection.
     # We need the raw sqlite3 connection to issue PRAGMAs outside
-    # aiosqlite's async wrapper. The module check is a fallback for
-    # direct sqlite3 connections (e.g. in synchronous Alembic runs).
-    sqlite_connection = getattr(dbapi_connection, "driver_connection", None)
-    if sqlite_connection is not None:
-        sqlite_connection = getattr(sqlite_connection, "_conn", None)
+    # aiosqlite's async wrapper. Synchronous Alembic runs hand over a
+    # sqlite3 connection directly.
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        return dbapi_connection
 
-    if sqlite_connection is None and dbapi_connection.__class__.__module__.startswith(
-        "sqlite3"
-    ):
-        sqlite_connection = dbapi_connection
+    driver_connection: object = getattr(dbapi_connection, "driver_connection", None)
+    sqlite_connection: object = getattr(driver_connection, "_conn", None)
+    if isinstance(sqlite_connection, sqlite3.Connection):
+        return sqlite_connection
 
-    if sqlite_connection is None:
-        raise RuntimeError(
-            "Could not access the underlying sqlite3 connection for PRAGMA setup"
-        )
-
-    return sqlite_connection
+    raise RuntimeError(
+        "Could not access the underlying sqlite3 connection for PRAGMA setup"
+    )
 
 
 def configure_sqlite_connection(
-    dbapi_connection: Any, _connection_record: PoolProxiedConnection
+    dbapi_connection: object, _connection_record: PoolProxiedConnection
 ) -> None:
     sqlite_connection = get_sqlite_connection(dbapi_connection)
     original_autocommit = sqlite_connection.autocommit
