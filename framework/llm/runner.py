@@ -9,23 +9,26 @@ short sessions rather than a request's session.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Sequence
+from collections.abc import AsyncGenerator, Sequence
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from litestar import Litestar
 from pydantic_ai import (
     Agent,
     BinaryContent,
     ModelMessage,
-    ModelMessagesTypeAdapter,
     ModelRequest,
+    ModelRequestPart,
     ModelResponse,
     UsageLimits,
     UserContent,
     UserPromptPart,
     capture_run_messages,
 )
+from sqlalchemy import update
 
 from framework.db import open_async_session
 from framework.llm.models import LlmRun, LlmRunStatus
@@ -43,7 +46,7 @@ class AgentResult[OutputT]:
 class AgentRunFailed(Exception):
     def __init__(self, run_id: int, message: str) -> None:
         super().__init__(message)
-        self.run_id = run_id
+        self.run_id: int = run_id
 
 
 async def run_agent[DepsT, OutputT](
@@ -52,7 +55,7 @@ async def run_agent[DepsT, OutputT](
     *,
     deps: DepsT,
     role: ModelRole = ModelRole.default,
-    message_history: Sequence[ModelMessage] | None = None,
+    message_history: Sequence[ModelMessage] = (),
     usage_limits: UsageLimits = DEFAULT_USAGE_LIMITS,
 ) -> AgentResult[OutputT]:
     if agent.name is None:
@@ -66,16 +69,43 @@ async def run_agent[DepsT, OutputT](
                 prompt,
                 deps=deps,
                 model=model,
-                message_history=message_history,
+                message_history=list(message_history),
                 usage_limits=usage_limits,
             )
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
-            await _finish_run(run_id, LlmRunStatus.failed, messages, error=error)
+            await _finish_run(
+                run_id,
+                LlmRunStatus.failed,
+                messages,
+                history_length=len(message_history),
+                error=error,
+            )
             raise AgentRunFailed(run_id, error) from exc
 
-    await _finish_run(run_id, LlmRunStatus.succeeded, result.all_messages())
+    await _finish_run(
+        run_id,
+        LlmRunStatus.succeeded,
+        result.all_messages(),
+        history_length=len(message_history),
+    )
     return AgentResult(output=result.output, run_id=run_id)
+
+
+@asynccontextmanager
+async def llm_lifespan(_app: Litestar) -> AsyncGenerator[None]:
+    """Mark runs cut off by the last shutdown or crash as interrupted.
+
+    The app runs as a single process, so no run is in progress at startup.
+    """
+    async with open_async_session() as session:
+        await session.execute(
+            update(LlmRun)
+            .where(LlmRun.status == LlmRunStatus.running)
+            .values(status=LlmRunStatus.interrupted, finished_at=datetime.now(UTC))
+        )
+        await session.commit()
+    yield
 
 
 async def _start_run(agent: str, model: str) -> int:
@@ -91,11 +121,16 @@ async def _finish_run(
     status: LlmRunStatus,
     messages: Sequence[ModelMessage],
     *,
+    history_length: int,
     error: str | None = None,
 ) -> None:
-    responses = [message for message in messages if isinstance(message, ModelResponse)]
-    costs = [response.usage.cost for response in responses]
-
+    # Messages start with the history the run continued from; only the rest
+    # was spent by this run.
+    responses = [
+        message
+        for message in messages[history_length:]
+        if isinstance(message, ModelResponse)
+    ]
     async with open_async_session() as session:
         run = await session.get_one(LlmRun, run_id)
         run.status = status
@@ -103,12 +138,20 @@ async def _finish_run(
         run.requests = len(responses)
         run.input_tokens = sum(response.usage.input_tokens for response in responses)
         run.output_tokens = sum(response.usage.output_tokens for response in responses)
-        run.cost_usd = sum(costs, Decimal(0)) if costs and None not in costs else None
+        run.cost_usd = _total_cost(responses)
         run.error = error
-        run.messages = ModelMessagesTypeAdapter.dump_python(
-            without_binary_content(messages), mode="json"
-        )
+        run.messages = without_binary_content(messages)
         await session.commit()
+
+
+def _total_cost(responses: Sequence[ModelResponse]) -> Decimal | None:
+    """Sum the responses' costs, or None if any response couldn't be priced."""
+    total = Decimal(0)
+    for response in responses:
+        if response.usage.cost is None:
+            return None
+        total += response.usage.cost
+    return total
 
 
 def without_binary_content(messages: Sequence[ModelMessage]) -> list[ModelMessage]:
@@ -127,7 +170,7 @@ def without_binary_content(messages: Sequence[ModelMessage]) -> list[ModelMessag
     ]
 
 
-def _without_binary_part[PartT](part: PartT) -> PartT:
+def _without_binary_part(part: ModelRequestPart) -> ModelRequestPart:
     if not isinstance(part, UserPromptPart) or isinstance(part.content, str):
         return part
     return dataclasses.replace(

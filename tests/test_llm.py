@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import pytest
+from litestar import Litestar
 from pydantic_ai import (
     Agent,
     BinaryContent,
@@ -12,6 +14,7 @@ from pydantic_ai import (
     TextPart,
     ToolCallPart,
     ToolReturnPart,
+    UserContent,
     UserPromptPart,
 )
 from pydantic_ai.models.function import AgentInfo, FunctionModel
@@ -24,6 +27,7 @@ from framework.llm import (
     LlmRun,
     LlmRunStatus,
     ModelRole,
+    llm_lifespan,
     resolve_model,
     run_agent,
     web_toolset,
@@ -61,6 +65,35 @@ async def _get_run(run_id: int) -> LlmRun:
         return await session.get_one(LlmRun, run_id)
 
 
+def _first_prompt(run: LlmRun) -> str | Sequence[UserContent]:
+    assert run.messages is not None
+    request = run.messages[0]
+    assert isinstance(request, ModelRequest)
+    part = request.parts[0]
+    assert isinstance(part, UserPromptPart)
+    return part.content
+
+
+def _broken_model(_messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+    raise RuntimeError("provider exploded")
+
+
+def _answer_once_then_break() -> Callable[
+    [list[ModelMessage], AgentInfo], ModelResponse
+]:
+    """A model whose first response calls a missing tool, and whose retry fails."""
+    calls = 0
+
+    def respond(_messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise RuntimeError("provider exploded")
+        return ModelResponse(parts=[ToolCallPart("missing_tool", {})])
+
+    return respond
+
+
 class TestModelRoles:
     def test_roles_have_code_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("TOGETHER_LLM_MODEL_DEFAULT", raising=False)
@@ -90,17 +123,48 @@ class TestRunAgent:
         assert run.input_tokens > 0
         assert run.cost_usd is None  # TestModel has no price
         assert run.error is None
-        assert run.messages is not None
-        assert run.messages[0]["parts"][0]["content"] == "Khachapuri was great"
+        assert _first_prompt(run) == "Khachapuri was great"
+
+    async def test_continued_run_records_only_its_own_usage(
+        self, reset_database: None
+    ) -> None:
+        agent = Agent(name="test.chat")
+
+        with agent.override(model=TestModel()):
+            first = await run_agent(agent, "first", deps=None)
+            history = (await _get_run(first.run_id)).messages
+            assert history is not None
+            second = await run_agent(
+                agent, "second", deps=None, message_history=history
+            )
+
+        second_run = await _get_run(second.run_id)
+        assert second_run.requests == 1
+        assert second_run.messages is not None
+        assert len(second_run.messages) == len(history) + 2
+
+    async def test_failed_continued_run_records_only_its_own_usage(
+        self, reset_database: None
+    ) -> None:
+        agent = Agent(name="test.chat")
+        with agent.override(model=TestModel()):
+            first = await run_agent(agent, "first", deps=None)
+        history = (await _get_run(first.run_id)).messages
+        assert history is not None
+
+        with (
+            agent.override(model=FunctionModel(_answer_once_then_break())),
+            pytest.raises(AgentRunFailed) as caught,
+        ):
+            await run_agent(agent, "second", deps=None, message_history=history)
+
+        assert (await _get_run(caught.value.run_id)).requests == 1
 
     async def test_records_failed_run(self, reset_database: None) -> None:
-        def broken_model(_messages: list[ModelMessage], _info: AgentInfo):
-            raise RuntimeError("provider exploded")
-
         agent = Agent(name="test.broken")
 
         with (
-            agent.override(model=FunctionModel(broken_model)),
+            agent.override(model=FunctionModel(_broken_model)),
             pytest.raises(AgentRunFailed, match="provider exploded") as caught,
         ):
             await run_agent(agent, "hello", deps=None)
@@ -118,15 +182,30 @@ class TestRunAgent:
             result = await run_agent(agent, ["Read this receipt", receipt], deps=None)
 
         run = await _get_run(result.run_id)
-        assert run.messages is not None
-        assert run.messages[0]["parts"][0]["content"] == [
-            "Read this receipt",
-            "[image/png omitted]",
-        ]
+        assert _first_prompt(run) == ["Read this receipt", "[image/png omitted]"]
 
     async def test_rejects_unnamed_agents(self) -> None:
         with pytest.raises(ValueError, match="must be named"):
             await run_agent(Agent(), "hello", deps=None)
+
+
+class TestInterruptedRuns:
+    async def test_startup_marks_unfinished_runs_interrupted(
+        self, reset_database: None, litestar_app: Litestar
+    ) -> None:
+        async with open_async_session() as session:
+            unfinished = LlmRun(agent="a", model="m", status=LlmRunStatus.running)
+            finished = LlmRun(agent="a", model="m", status=LlmRunStatus.succeeded)
+            session.add_all([unfinished, finished])
+            await session.commit()
+
+        async with llm_lifespan(litestar_app):
+            pass
+
+        unfinished_run = await _get_run(unfinished.id)
+        assert unfinished_run.status is LlmRunStatus.interrupted
+        assert unfinished_run.finished_at is not None
+        assert (await _get_run(finished.id)).status is LlmRunStatus.succeeded
 
 
 class TestWithoutBinaryContent:
@@ -148,16 +227,18 @@ class TestWebTools:
             links=tuple(
                 Link(f"Link {i}", f"https://example.com/{i}") for i in range(5)
             ),
-            structured_data=({"@type": "Restaurant"},),
+            structured_data=({"@type": "Restaurant", "name": "Saperavi"},),
         )
 
-        formatted = format_page(page, max_chars=10, max_links=2)
+        formatted = format_page(
+            page, max_chars=10, max_structured_data_chars=20, max_links=2
+        )
 
         assert formatted == (
             "URL: https://example.com/\n\n"
             "Title: Example\n\n"
             "xxxxxxxxxx\n[truncated]\n\n"
-            'Structured data:\n{"@type": "Restaurant"}\n\n'
+            'Structured data:\n{"@type": "Restauran\n[truncated]\n\n'
             "Links:\n"
             "- Link 0: https://example.com/0\n"
             "- Link 1: https://example.com/1\n"

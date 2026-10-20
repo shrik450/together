@@ -333,8 +333,12 @@ result.run_id  # the run's LlmRun row
   `GOOGLE_API_KEY`)
 - **Run records:** every run writes an `LlmRun` row: agent, model, status,
   requests, tokens, best-effort cost, error, and messages. Runs can be long, so
-  records use their own sessions. Images and other files in the prompt are
+  records use their own sessions. Usage counts only the run's own requests,
+  not the history it continued from. `messages` loads as Pydantic AI messages,
+  ready to pass as `message_history`. Images and other files in the prompt are
   replaced with a note before the messages are stored
+- **Interrupted runs:** `llm_lifespan` marks runs still `running` at startup as
+  `interrupted`, since the app runs as a single process
 - **Failures:** a failed run is recorded and raised as `AgentRunFailed`, which
   carries its `run_id`. The module decides what failure means for its records
 - **Limits:** runs default to at most 30 model requests; pass `usage_limits`
