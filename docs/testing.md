@@ -46,7 +46,9 @@ tests/
 ├── conftest.py
 ├── helpers.py
 ├── test_auth.py
+├── test_browser.py
 ├── test_db.py
+├── test_llm.py
 ├── test_scheduler.py
 ├── test_ui.py
 └── test_app.py
@@ -55,8 +57,8 @@ tests/
 Guidelines:
 
 - `tests/conftest.py` holds shared fixtures only.
-- `tests/helpers.py` holds reusable test-only helper functions and module-level
-  scheduler task functions.
+- `tests/helpers.py` holds reusable test-only helper functions, module-level
+  scheduler task functions, and the fixture web server's pages.
 - Each test file should contain a few classes grouped by behavior, not one huge
   flat list of tests.
 - Prefer shared helper methods on classes when several tests differ only by one
@@ -77,6 +79,12 @@ These should live in `tests/conftest.py` and be reused across files.
 - `migrated_db`: creates schema for integration tests.
 - `user_factory`: creates real `User` rows.
 - `client`: Litestar test client against the real app.
+- `web_server_url`: a local HTTP server serving fixture pages (a restaurant
+  page with JSON-LD, a redirect, a page rendered by JavaScript, a fake search
+  results page, a "blocked" search page, and a slow page).
+- `browser_service`: a real `BrowserService` with a temporary profile, allowed
+  to reach the local server, with search pointed at the fake results page. It
+  is also installed as the app's browser service, so `web_toolset` uses it.
 
 Notes:
 
@@ -252,6 +260,23 @@ Implementation notes:
 
 - Keep this file focused on app composition and a few smoke tests.
 - Do not duplicate auth behavior already tested in `tests/test_auth.py`.
+
+### `tests/test_browser.py`
+
+Browser tests drive the real Chromium from the flake against `web_server_url`;
+nothing in the suite reaches the internet. Pure helpers (address checks, search
+result filtering, JSON-LD parsing) get plain unit tests.
+
+### `tests/test_llm.py`
+
+`conftest.py` sets Pydantic AI's `ALLOW_MODEL_REQUESTS = False`, so a test that
+forgets to swap in a fake model fails instead of calling a provider.
+
+- Swap models with `agent.override(model=...)`, which takes precedence over
+  the model `run_agent` passes in.
+- Use `TestModel` when any valid output will do, and `FunctionModel` to script
+  tool calls and answers.
+- Assert on outputs and `LlmRun` rows, not on the messages a model was sent.
 
 ## What We Intentionally Do Not Test Yet
 

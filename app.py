@@ -16,7 +16,9 @@ from framework.auth import (
 )
 from framework.auth.guards import AuthRequired, auth_required_handler
 from framework.auth.middleware import SessionMiddleware
+from framework.browser import browser_lifespan
 from framework.db import create_db_config
+from framework.llm import LlmRun  # noqa: F401  (registers llm_runs for migrations)
 from framework.scheduler import scheduler_lifespan
 from framework.security import SecurityHeadersMiddleware
 from framework.ui import NavNode, get_nav_nodes
@@ -65,5 +67,5 @@ app = Litestar(
         engine=JinjaTemplateEngine,
         engine_callback=register_template_callables,
     ),
-    lifespan=[scheduler_lifespan],
+    lifespan=[scheduler_lifespan, browser_lifespan],
 )

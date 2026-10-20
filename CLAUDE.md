@@ -27,13 +27,16 @@ used by anyone other than its creators.
 - **Framework**: Litestar (Python web framework)
 - **Frontend**: HTMX for client-side interactivity
 - **Database**: SQLAlchemy with SQLite
-- **Scheduling**: APScheduler for periodic tasks
+- **Scheduling**: APScheduler for periodic tasks and queued jobs
+- **LLMs**: Pydantic AI, run through `framework.llm` (model roles, run records)
+- **Web access**: Zendriver driving Chromium, through `framework.browser`
 - **Package Manager**: uv
 - **Python**: 3.14+
 
 ## Commands
 
-All tooling (Python, uv, ruff, prettier, just) comes from the flake's dev shell.
+All tooling (Python, uv, ruff, prettier, just, Chromium) comes from the
+flake's dev shell.
 Run commands inside it, e.g. `nix develop -c <command>`.
 
 ```bash

@@ -17,18 +17,21 @@ do more things together. It is being built around modules like:
 
 It is structured as a webapp with sub-routes for each module.
 
-Current status: the scaffolded app shell, auth flow, database integration, and
-scheduler infrastructure are in place. Feature modules beyond the placeholder
-home route have not been built yet.
+Current status: the scaffolded app shell, auth flow, database integration,
+scheduler (including queued jobs), browser, and LLM infrastructure are in place.
+Feature modules beyond the placeholder home route have not been built yet.
 
 The webapp is built on the following stack:
 
 1. Litestar as the server
 2. HTMX for client-side interactivity
 3. Advanced Alchemy + SQLAlchemy with async SQLite for the database
-4. APScheduler 4.x for scheduling periodic tasks
-5. uv as the package manager
-6. uv + SQLite for a simple server deployment
+4. APScheduler 4.x for scheduled and queued jobs
+5. Pydantic AI for LLM features, with model roles that can point at any
+   provider
+6. Zendriver driving Chromium for reading web pages
+7. uv as the package manager
+8. uv + SQLite for a simple server deployment
 
 The architecture is designed to make adding modules easy and provide a simple
 framework for building them; see `docs/architecture.md`.
@@ -53,10 +56,15 @@ Optional:
 
 - `SESSION_MAX_AGE_DAYS` - session expiry in days (default: 30)
 - `TOGETHER_SECURE_COOKIES` - set `false` for local HTTP (default: true)
+- `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` - keys for the LLM
+  providers the model roles use (by default, only Anthropic)
+- `TOGETHER_LLM_MODEL_DEFAULT`, `TOGETHER_LLM_MODEL_FAST` - override a model
+  role with any Pydantic AI `<provider>:<model>` name
 
 ## Local setup
 
-The toolchain (Python, uv, ruff, prettier, just) comes from the flake. Enter the
+The toolchain (Python, uv, ruff, prettier, just, Chromium) comes from the
+flake. Enter the
 dev shell first:
 
 ```bash
