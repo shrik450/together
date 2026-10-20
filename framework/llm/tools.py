@@ -13,6 +13,7 @@ from pydantic_ai import FunctionToolset
 from framework.browser import BrowserError, Page, get_browser_service
 
 MAX_PAGE_CHARS = 20_000
+MAX_STRUCTURED_DATA_CHARS = 5_000
 MAX_LINKS = 60
 
 web_toolset: FunctionToolset[object] = FunctionToolset(
@@ -50,19 +51,19 @@ async def fetch_page(url: str) -> str:
 
 
 def format_page(
-    page: Page, *, max_chars: int = MAX_PAGE_CHARS, max_links: int = MAX_LINKS
+    page: Page,
+    *,
+    max_chars: int = MAX_PAGE_CHARS,
+    max_structured_data_chars: int = MAX_STRUCTURED_DATA_CHARS,
+    max_links: int = MAX_LINKS,
 ) -> str:
     sections = [f"URL: {page.url}", f"Title: {page.title}"]
-
-    text = page.text.strip()
-    if len(text) > max_chars:
-        text = text[:max_chars] + "\n[truncated]"
-    sections.append(text)
+    sections.append(_truncate(page.text.strip(), max_chars))
 
     if page.structured_data:
+        structured_data = "\n".join(json.dumps(item) for item in page.structured_data)
         sections.append(
-            "Structured data:\n"
-            + "\n".join(json.dumps(item) for item in page.structured_data)
+            "Structured data:\n" + _truncate(structured_data, max_structured_data_chars)
         )
 
     if page.links:
@@ -72,3 +73,9 @@ def format_page(
         sections.append("Links:\n" + "\n".join(links))
 
     return "\n\n".join(sections)
+
+
+def _truncate(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + "\n[truncated]"

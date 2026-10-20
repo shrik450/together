@@ -230,7 +230,7 @@ ______________________________________________________________________
 - FR-F2.1: Modules run Pydantic AI agents by model role (`default`, `fast`);
   each role's model is set in code and can be overridden from the environment
 - FR-F2.2: Every run is recorded with its agent, model, status, usage, cost,
-  error and messages
+  error and messages; runs cut off by a restart are marked interrupted
 - FR-F2.3: Images in prompts are not stored in run records
 - FR-F2.4: Agents can search the web and read pages through the framework
   browser, whatever the provider
