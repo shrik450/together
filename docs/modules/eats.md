@@ -241,7 +241,8 @@ ______________________________________________________________________
   final URL, title, main text, structured data and links
 - FR-F3.2: The framework can run a Google search and return the results page's
   text and result links, and reports when the search is blocked
-- FR-F3.3: Requests to private, loopback and link-local addresses are refused
+- FR-F3.3: Every request a page makes, including redirects and resources, is
+  refused if it goes to a private, loopback or link-local address
 
 ## Module Requirements
 

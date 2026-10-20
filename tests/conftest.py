@@ -6,8 +6,8 @@ import os
 import sys
 import threading
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
-from datetime import timedelta
-from http.server import ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Any
 
@@ -24,9 +24,16 @@ from framework.auth.models import User
 from framework.auth.session import get_session_config
 from framework.browser import BrowserConfig, BrowserService
 from framework.db import Base, create_db_config, get_async_engine, open_async_session
-from tests.helpers import WebFixtureHandler, reset_scheduler_task_calls
+from tests.helpers import (
+    RecordingHandler,
+    WebFixtureHandler,
+    reset_scheduler_task_calls,
+)
 
 TEST_SECRET_KEY = "0123456789abcdef0123456789abcdef"
+# Both are loopback addresses; the browser is allowed to reach only the first.
+WEB_SERVER_ADDRESS = "127.0.0.1"
+HOME_NETWORK_ADDRESS = "127.0.0.2"
 
 # Tests must swap in fake models with `agent.override`; a real model request
 # fails instead of reaching a provider.
@@ -100,28 +107,50 @@ async def client(
         yield test_client
 
 
-@pytest.fixture(scope="session")
-def web_server_url() -> Iterator[str]:
-    server = ThreadingHTTPServer(("127.0.0.1", 0), WebFixtureHandler)
+def _serve(address: str, handler: type[BaseHTTPRequestHandler]) -> Iterator[str]:
+    server = ThreadingHTTPServer((address, 0), handler)
     server.daemon_threads = True
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    yield f"http://127.0.0.1:{server.server_port}"
+    yield f"http://{address}:{server.server_port}"
     server.shutdown()
+    server.server_close()
+
+
+@pytest.fixture(scope="session")
+def web_server_url() -> Iterator[str]:
+    yield from _serve(WEB_SERVER_ADDRESS, WebFixtureHandler)
+
+
+@pytest.fixture(scope="session")
+def home_network_server() -> Iterator[str]:
+    yield from _serve(HOME_NETWORK_ADDRESS, RecordingHandler)
+
+
+@pytest.fixture
+def home_network_url(home_network_server: str) -> str:
+    """A server the browser must never reach: it stands in for the home network.
+
+    `RecordingHandler.requests` lists what it received during the test.
+    """
+    RecordingHandler.requests.clear()
+    return home_network_server
+
+
+@pytest.fixture
+def browser_config(tmp_path: Path, web_server_url: str) -> BrowserConfig:
+    return BrowserConfig(
+        profile_dir=tmp_path / "browser-profile",
+        allowed_private_addresses=frozenset({ip_address(WEB_SERVER_ADDRESS)}),
+        google_search_url=f"{web_server_url}/search",
+    )
 
 
 @pytest.fixture
 async def browser_service(
-    tmp_path: Path, web_server_url: str
+    browser_config: BrowserConfig,
 ) -> AsyncIterator[BrowserService]:
-    service = BrowserService(
-        BrowserConfig(
-            profile_dir=tmp_path / "browser-profile",
-            allow_private_networks=True,
-            search_url=f"{web_server_url}/search",
-            page_timeout=timedelta(seconds=10),
-        )
-    )
+    service = BrowserService(browser_config)
     browser_service_module._service = service
     yield service
     browser_service_module._service = None

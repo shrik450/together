@@ -82,9 +82,14 @@ These should live in `tests/conftest.py` and be reused across files.
 - `web_server_url`: a local HTTP server serving fixture pages (a restaurant
   page with JSON-LD, a redirect, a page rendered by JavaScript, a fake search
   results page, a "blocked" search page, and a slow page).
-- `browser_service`: a real `BrowserService` with a temporary profile, allowed
-  to reach the local server, with search pointed at the fake results page. It
-  is also installed as the app's browser service, so `web_toolset` uses it.
+- `home_network_url`: a server on `127.0.0.2` that stands in for a device on
+  the home network. `RecordingHandler.requests` lists what it received, so
+  tests can show the browser never reached it.
+- `browser_config`: a `BrowserConfig` with a temporary profile, allowed to
+  reach only the fixture web server's address, with search pointed at the fake
+  results page. Vary it with `dataclasses.replace`.
+- `browser_service`: a real `BrowserService` from `browser_config`. It is also
+  installed as the app's browser service, so `web_toolset` uses it.
 
 Notes:
 
