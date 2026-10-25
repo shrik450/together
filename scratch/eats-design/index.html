@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eats System Design</title>
+<style>
+:root {
+  --bg: #f6f2ea; --surface: #fffdf8; --sunk: #efe8dc; --text: #1f1b16; --muted: #6b6257;
+  --border: #d9cfbf; --accent: #a2351f; --m1: #2f6f4f; --m2: #8a5a12; --m3: #3b5b9a; --m4: #8b3a62; --m5: #5c5c5c;
+  --code: #f1ebe0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171512; --surface: #211e1a; --sunk: #1b1916; --text: #efe9df; --muted: #a59b8d;
+    --border: #3d3730; --accent: #e0775c; --m1: #6fbf95; --m2: #d9a14a; --m3: #8eaee8; --m4: #d98bb3; --m5: #a8a8a8;
+    --code: #2a2621;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; line-height: 1.55; }
+main { max-width: 900px; margin: 0 auto; padding: 48px 16px 96px; }
+h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; line-height: 1.15; }
+h1 { font-size: 2.6rem; margin: 4px 0 16px; }
+h2 { font-size: 1.7rem; margin: 64px 0 12px; padding-top: 16px; border-top: 2px solid var(--text); }
+h3 { font-size: 1.2rem; margin: 32px 0 8px; }
+p, li { max-width: 72ch; }
+a { color: inherit; }
+.kicker { text-transform: uppercase; letter-spacing: .12em; font-size: .72rem; font-weight: 700; color: var(--accent); }
+.dek { font-family: Georgia, serif; font-size: 1.2rem; color: var(--muted); max-width: 64ch; }
+code, pre { font-family: "SF Mono", "Fira Code", Consolas, monospace; font-size: .86em; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow-x: auto; line-height: 1.45; }
+pre code { background: none; padding: 0; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .9rem; margin: 24px 0 0; padding: 12px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.toc a { text-decoration: none; color: var(--muted); }
+.toc a:hover { color: var(--text); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin: 12px 0; }
+.card > :first-child { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+.decision { border-left: 4px solid var(--accent); }
+.decision h3 { margin: 0 0 6px; }
+.rec { font-weight: 600; }
+.tag { display: inline-block; font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; border: 1px solid currentColor; vertical-align: middle; white-space: nowrap; }
+.m1 { color: var(--m1); } .m2 { color: var(--m2); } .m3 { color: var(--m3); } .m4 { color: var(--m4); } .m5 { color: var(--m5); }
+.muted { color: var(--muted); }
+.small { font-size: .88rem; }
+.scroll { overflow-x: auto; margin: 12px 0; }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+th { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+td code { white-space: nowrap; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin: 12px 0; }
+.tbl { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-size: .86rem; }
+.tbl h4 { margin: 0 0 6px; font-family: "SF Mono", Consolas, monospace; font-size: .92rem; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.tbl ul { list-style: none; padding: 0; margin: 0; }
+.tbl li { padding: 2px 0; border-top: 1px dashed var(--border); font-family: "SF Mono", Consolas, monospace; font-size: .8rem; }
+.tbl li:first-child { border-top: none; }
+.tbl li span { color: var(--muted); font-family: system-ui, sans-serif; }
+.tbl .note { margin-top: 6px; color: var(--muted); font-size: .8rem; }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0; }
+.st { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: .86rem; font-family: "SF Mono", Consolas, monospace; }
+.st.end { border-style: double; border-width: 3px; }
+.arr { color: var(--muted); font-size: .85rem; }
+.lanes { display: grid; grid-template-columns: 110px 1fr; gap: 0; font-size: .9rem; margin: 12px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.lanes > div { padding: 8px 12px; border-top: 1px solid var(--border); }
+.lanes > div:nth-child(-n+2) { border-top: none; }
+.lanes .who { font-weight: 700; font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--sunk); }
+.core { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+.core .card { margin: 0; }
+.core h4 { margin: 0 0 6px; font-family: Georgia, serif; font-size: 1.05rem; }
+.core ul { margin: 0; padding-left: 18px; font-size: .9rem; }
+.tree { font-family: "SF Mono", Consolas, monospace; font-size: .82rem; line-height: 1.6; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; overflow-x: auto; white-space: pre; }
+.tree .c { color: var(--muted); font-family: system-ui, sans-serif; font-size: .82rem; }
+.evidence { font-family: "SF Mono", Consolas, monospace; font-size: .78rem; line-height: 1.5; background: var(--code); border-radius: 8px; padding: 10px 12px; overflow-x: auto; white-space: pre; }
+.hl { background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 3px; }
+blockquote { margin: 16px 0; padding: 4px 0 4px 16px; border-left: 3px solid var(--accent); font-family: Georgia, serif; font-size: 1.1rem; }
+@media (max-width: 640px) {
+  h1 { font-size: 2rem; }
+  .core { grid-template-columns: 1fr; }
+  .lanes { grid-template-columns: 1fr; }
+  .lanes .who { border-top: 1px solid var(--border); }
+}
+</style>
+</head>
+<body>
+<main>
+
+<div class="kicker">Together · Eats · System design</div>
+<h1>How Eats is built</h1>
+<p class="dek">The design for the whole module across all five milestones, with milestone 1 in the most detail since it comes first. It builds on the spec in <code>docs/modules/eats.md</code> and the framework that's already merged.</p>
+
+<nav class="toc">
+  <a href="#decide">Decisions for you</a>
+  <a href="#maps">What the Maps check found</a>
+  <a href="#shape">Module shape</a>
+  <a href="#data">Data</a>
+  <a href="#invariants">Invariants</a>
+  <a href="#flows">Flows</a>
+  <a href="#routes">Routes</a>
+  <a href="#framework">Framework changes</a>
+  <a href="#milestones">Milestones</a>
+  <a href="#testing">Testing</a>
+  <a href="#spec">Spec changes</a>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="decide">Decisions for you</h2>
+<p>These choices change what I'd build. Each one has my recommendation. The rest of the page assumes the recommendation, and says where a different answer would change it.</p>
+
+<div class="card decision">
+  <h3>1. Coordinates come from the Maps link; drop the address and Nominatim</h3>
+  <p>The spec stores an address so Nominatim can geocode it for the map. But once the browser waits for the Maps page to finish loading, the Maps URL itself carries the place's exact pin (<code>!3d…!4d…</code>). Nothing else would use the address: we don't filter, sort or map on it, and the place page already links to Maps.</p>
+  <p class="rec">Recommend: no address field and no Nominatim. A place gets coordinates from its Maps link; a place with no Maps link doesn't show on the map until it has one. This removes a third-party service, its rate limit and a queued geocoding job from milestone 5.</p>
+</div>
+
+<div class="card decision">
+  <h3>2. One place per Maps place, enforced</h3>
+  <p>The spec says adding a place whose Maps link we already have <em>warns</em>. The Maps URL contains a stable feature ID (<code>0x89c2598f7ff4aa09:0x313547e757cb8cea</code>), the same whichever phone or link format it came from. Two records for one feature ID are always a mistake.</p>
+  <p class="rec">Recommend: <code>maps_feature_id</code> is unique on places. Pasting a known place's link shows "You already have Katz's Delicatessen" with a link to it, rather than a warning you can click through. Merging still handles duplicates that slipped in without a Maps link.</p>
+</div>
+
+<div class="card decision">
+  <h3>3. Search with <code>LIKE</code>, not SQLite FTS5</h3>
+  <p>Search covers place names, notes, dish names and takes. FTS5 means a virtual table, triggers to keep it in sync, and a second place that has to filter out unrevealed takes. Two people will have hundreds of places, not hundreds of thousands, so a case-insensitive substring match across four columns returns instantly.</p>
+  <p class="rec">Recommend: <code>LIKE</code> queries, with places whose names match ranked first. FTS5 is the upgrade path if we ever want stemming or ranking, and the search function's interface won't change.</p>
+</div>
+
+<div class="card decision">
+  <h3>4. Place URLs are <code>/eats/places/{id}/</code></h3>
+  <p><code>docs/architecture.md</code> sketches <code>/eats/&lt;place-id&gt;/</code>. Eats also has tags, visits, rounds and an inbox, so bare numbers at the top level would share a namespace with words like <code>inbox</code>.</p>
+  <p class="rec">Recommend: <code>/eats/places/{id}/</code>, <code>/eats/tags/{name}/</code>, <code>/eats/visits/{id}/</code> and so on, and update the architecture doc's example.</p>
+</div>
+
+<div class="card decision">
+  <h3>5. Merging deletes the merged-away place</h3>
+  <p>After a merge, everything belonging to the duplicate (links, tags, interest, visits, dishes, round candidates) moves to the place we keep, and the duplicate is deleted. A bookmark to the deleted place's URL then shows "not found".</p>
+  <p class="rec">Recommend: delete it, with no redirect. Duplicates will be rare and young, so they're unlikely to be bookmarked. The database then checks the merge for us (see <a href="#invariants">invariants</a>).</p>
+</div>
+
+<div class="card decision">
+  <h3>6. "Time waited" means since added or last visited</h3>
+  <p>Sorting and quick pick both use "how long a place has waited", which the spec doesn't define.</p>
+  <p class="rec">Recommend: time since the later of the place being added and its last visit. Logging a visit doesn't change anyone's interest; it restarts the wait.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="maps">What the Maps check found</h2>
+<p>The spec leaves open how reliably Maps links resolve to coordinates. An earlier test said the address bar never changed. I opened a Maps search link in the framework browser again and read the address bar every 1.5 seconds:</p>
+<div class="evidence">0  /maps/search/?api=1&amp;query=Katz's+Delicatessen+New+York
+1  /maps/search/?api=1&amp;query=…
+2  /maps/search/?api=1&amp;query=…
+3  /maps/place/Katz's+Delicatessen/@40.722233,-73.987429,17z/data=!3m1!4b1!4m6!3m5
+     !1s<span class="hl">0x89c2598f7ff4aa09:0x313547e757cb8cea</span>!8m2!3d<span class="hl">40.722233</span>!4d<span class="hl">-73.987429</span>!16z…
+title: "Katz's Delicatessen - Google Maps"
+text:  … 205 E Houston St, New York, NY 10002 …</div>
+<p>Maps rewrites the URL about four seconds after load. <code>BrowserService.fetch</code> takes its snapshot once the page's text stops changing, which is earlier, so that's why the first test missed it. Once the URL has changed, it gives us:</p>
+<ul>
+  <li><strong>Identity:</strong> the feature ID after <code>!1s</code>, the same however the link was shared.</li>
+  <li><strong>Coordinates:</strong> the pin, from <code>!3d</code> (latitude) and <code>!4d</code> (longitude). The <code>@</code> part is where the map is centred, which isn't always the pin.</li>
+  <li><strong>Name:</strong> the page title, minus " - Google Maps".</li>
+</ul>
+<p>A <code>?cid=</code> link and a bare <code>/maps/place/Name</code> link didn't load a place within the probe's time limit. A search that matches several places stays on <code>/maps/search/</code>, so no single place is found. I couldn't test the links our phones actually share (<code>maps.app.goo.gl/…</code>). <strong>Please send me three or four real share links from each of your phones</strong> before I build the lookup.</p>
+<p>The framework change this needs is small: <code>fetch</code> takes an optional condition on the URL and keeps waiting, up to a limit, until the URL meets it (<a href="#framework">below</a>).</p>
+
+<!-- ============================================================ -->
+<h2 id="shape">Module shape</h2>
+<p>Eats is a normal module under <code>modules/eats/</code>, registered in <code>app.py</code> like <code>home</code>. It splits into a <em>functional core</em> and an <em>imperative shell</em>. The core is the rules: who sees which take, how a round ends, how picks are weighted, what a Maps URL means. Those are pure functions of plain values, unit-tested. The shell is handlers, queries and jobs that read the database, call the core, and write the results back. It's tested end to end against a real SQLite database.</p>
+
+<div class="core">
+  <div class="card">
+    <h4>Core (pure, unit-tested)</h4>
+    <ul>
+      <li><code>links.link_kind(url)</code>: Google Maps, website, Yelp, Instagram or other</li>
+      <li><code>maps.parse_maps_place(url, title)</code>: feature ID, pin and name</li>
+      <li><code>takes.visible_takes(...)</code>: the reveal rule</li>
+      <li><code>dishes.dish_board(...)</code>: each person's latest verdict per dish</li>
+      <li><code>dishes.dish_key(name)</code>: the name used to match dishes</li>
+      <li><code>picking.quick_pick / random_pick</code>: weighting, with a seeded <code>Random</code> passed in</li>
+      <li><code>rounds.round_state(...)</code>: whose turn it is, and the result</li>
+      <li><code>finding.waited(...)</code>: time waited</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>Shell (integration-tested)</h4>
+    <ul>
+      <li><code>handlers/*</code>: parse forms, call queries, render templates</li>
+      <li><code>places.py</code>: create, edit, archive and merge places, all in one transaction</li>
+      <li><code>finding.py</code>: builds the <code>select</code> for filter, sort and search</li>
+      <li><code>maps.look_up(url)</code>: opens the link in the framework browser</li>
+      <li><code>proposals.py</code>, <code>jobs.py</code>, <code>llm.py</code>: capture</li>
+    </ul>
+  </div>
+</div>
+
+<div class="tree">modules/eats/
+├── __init__.py         <span class="c">router, register(): templates, nav node "Eats"</span>
+├── models.py           <span class="c">tables (below); no ORM relationships</span>
+├── handlers/
+│   ├── home.py         <span class="c">/eats/: panels and lists</span>
+│   ├── places.py       <span class="c">browse, place page, add, edit, links, tags, interest, merge</span>
+│   ├── visits.py       <span class="c">M2: visits, verdicts, takes</span>
+│   ├── decide.py       <span class="c">M3: quick pick, random pick, rounds</span>
+│   └── inbox.py        <span class="c">M4: capture and proposals</span>
+├── views.py            <span class="c">frozen dataclasses templates render: PlaceCard, PlaceDetail, TakeView…</span>
+├── places.py           <span class="c">writes: create, edit, archive, merge</span>
+├── finding.py          <span class="c">filters, sort, search → PlaceCards</span>
+├── links.py            <span class="c">pure</span>
+├── maps.py             <span class="c">pure parsing + one browser lookup</span>
+├── takes.py            <span class="c">M2: reveal rule, and the SQL condition for readable takes</span>
+├── dishes.py           <span class="c">M2: dish board, dish keys</span>
+├── picking.py          <span class="c">M3: pure</span>
+├── rounds.py           <span class="c">M3: round state (pure) + answers (writes)</span>
+├── proposals.py        <span class="c">M4: lifecycle, confirm, discard</span>
+├── jobs.py             <span class="c">M4: work_on_proposal(proposal_id)</span>
+├── llm.py              <span class="c">M4: capture agent, output types, Eats toolset</span>
+└── templates/eats/
+static/eats.css         <span class="c">the magazine look; loaded only on Eats pages</span></div>
+
+<h3>Reading and writing</h3>
+<ul>
+  <li><strong>No ORM relationships.</strong> Models declare columns and foreign keys only. Reads are explicit <code>select</code>s, so async code never lazy-loads by accident, and every page's queries are visible in one function.</li>
+  <li><strong>Templates get view dataclasses, not ORM rows.</strong> <code>finding.py</code> and friends return frozen dataclasses like <code>PlaceCard</code> and <code>PlaceDetail</code>. Takes leave the database only as <code>TakeView</code>, whose <code>text</code> is <code>None</code> until the take is revealed, so no template can show text it shouldn't.</li>
+  <li><strong>Handlers stay thin.</strong> They parse the form (Litestar's dataclass DTOs, or plain <code>Body</code> parsing), call one write or query function with the request's <code>db_session</code> and <code>current_user</code>, then render or redirect. Mutations are explicit form posts (POST then redirect). HTMX swaps fragments for the interest toggle, search-as-you-type and the Maps lookup.</li>
+  <li><strong>"Both of us" means every user.</strong> The reveal and round rules take the set of user IDs as an argument, so they're pure and testable. The shell reads it from <code>users</code>. With exactly two users that's the two of you; the rules check the count, so a third account fails clearly rather than quietly.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="data">Data</h2>
+<p>Every table is prefixed <code>eats_</code>, inherits <code>framework.db.Base</code> (integer ID plus <code>created_at</code>/<code>updated_at</code>), and gets one Alembic migration per milestone. The colour tag shows which milestone adds it.</p>
+
+<div class="grid">
+  <div class="tbl">
+    <h4>eats_places <span class="tag m1">M1</span></h4>
+    <ul>
+      <li>name <span>text</span></li>
+      <li>notes <span>text, shared, default ""</span></li>
+      <li>maps_feature_id <span>text, unique, nullable</span></li>
+      <li>latitude, longitude <span>float, nullable, both or neither</span></li>
+      <li>archived_at <span>datetime, nullable</span></li>
+    </ul>
+    <div class="note">Visited is worked out from visits, not stored.</div>
+  </div>
+  <div class="tbl">
+    <h4>eats_links <span class="tag m1">M1</span></h4>
+    <ul>
+      <li>place_id <span>→ places</span></li>
+      <li>url <span>text, as pasted</span></li>
+    </ul>
+    <div class="note">Unique (place_id, url). The kind comes from <code>link_kind(url)</code> when read, so it isn't stored.</div>
+  </div>
+  <div class="tbl">
+    <h4>eats_tags <span class="tag m1">M1</span></h4>
+    <ul>
+      <li>name <span>text, unique, lower-cased and trimmed</span></li>
+    </ul>
+    <div class="note">Deleted when its last place is untagged.</div>
+  </div>
+  <div class="tbl">
+    <h4>eats_place_tags <span class="tag m1">M1</span></h4>
+    <ul>
+      <li>place_id <span>→ places, PK</span></li>
+      <li>tag_id <span>→ tags, PK</span></li>
+    </ul>
+  </div>
+  <div class="tbl">
+    <h4>eats_interests <span class="tag m1">M1</span></h4>
+    <ul>
+      <li>place_id <span>→ places, PK</span></li>
+      <li>user_id <span>→ users, PK</span></li>
+    </ul>
+    <div class="note">A row means "wants to go". Removing interest deletes the row.</div>
+  </div>
+  <div class="tbl">
+    <h4>eats_visits <span class="tag m2">M2</span></h4>
+    <ul>
+      <li>place_id <span>→ places</span></li>
+      <li>visited_on <span>date</span></li>
+      <li>kind <span>dine_in | takeout | delivery</span></li>
+      <li>notes <span>text, shared</span></li>
+    </ul>
+  </div>
+  <div class="tbl">
+    <h4>eats_takes <span class="tag m2">M2</span></h4>
+    <ul>
+      <li>visit_id <span>→ visits, PK</span></li>
+      <li>user_id <span>→ users, PK</span></li>
+      <li>text <span>text</span></li>
+      <li>would_return <span>bool</span></li>
+    </ul>
+    <div class="note">The primary key allows one take per person per visit.</div>
+  </div>
+  <div class="tbl">
+    <h4>eats_dishes <span class="tag m2">M2</span></h4>
+    <ul>
+      <li>place_id <span>→ places</span></li>
+      <li>name <span>text, as written</span></li>
+      <li>key <span>text, <code>dish_key(name)</code></span></li>
+      <li>to_try <span>bool, shared</span></li>
+    </ul>
+    <div class="note">Unique (place_id, key), so "Khachapuri" and "khachapuri " are one dish.</div>
+  </div>
+  <div class="tbl">
+    <h4>eats_verdicts <span class="tag m2">M2</span></h4>
+    <ul>
+      <li>visit_id <span>→ visits, PK</span></li>
+      <li>dish_id <span>→ dishes, PK</span></li>
+      <li>user_id <span>→ users, PK</span></li>
+      <li>verdict <span>loved | fine | skip</span></li>
+    </ul>
+  </div>
+  <div class="tbl">
+    <h4>eats_rounds <span class="tag m3">M3</span></h4>
+    <ul>
+      <li>rule <span>both_swipe | propose_pick</span></li>
+      <li>started_by <span>→ users</span></li>
+      <li>decided_place_id <span>→ places, nullable</span></li>
+      <li>closed_at <span>datetime, nullable</span></li>
+    </ul>
+    <div class="note">Whose turn it is and the matches come from <code>round_state()</code>; they aren't stored.</div>
+  </div>
+  <div class="tbl">
+    <h4>eats_round_candidates <span class="tag m3">M3</span></h4>
+    <ul>
+      <li>round_id <span>→ rounds, PK</span></li>
+      <li>place_id <span>→ places, PK</span></li>
+      <li>deal <span>int: 1, 2… for re-deals</span></li>
+    </ul>
+    <div class="note">For propose and pick, these are the shortlist.</div>
+  </div>
+  <div class="tbl">
+    <h4>eats_round_answers <span class="tag m3">M3</span></h4>
+    <ul>
+      <li>round_id, place_id <span>→ candidates, PK</span></li>
+      <li>user_id <span>→ users, PK</span></li>
+      <li>answer <span>yes | no | pick</span></li>
+    </ul>
+  </div>
+  <div class="tbl">
+    <h4>eats_proposals <span class="tag m4">M4</span></h4>
+    <ul>
+      <li>source <span>name | link | text | receipt</span></li>
+      <li>input <span>text: what was typed or pasted</span></li>
+      <li>image <span>blob, nullable; cleared once read</span></li>
+      <li>status <span>queued | working | ready | failed</span></li>
+      <li>created_by <span>→ users</span></li>
+      <li>started_at <span>datetime, nullable</span></li>
+      <li>llm_run_id <span>→ llm_runs, nullable</span></li>
+      <li>output <span>JSON: the agent's <code>Capture</code></span></li>
+      <li>error <span>text, nullable</span></li>
+    </ul>
+    <div class="note">Deleted on confirm or discard; the LLM run record stays.</div>
+  </div>
+</div>
+<p class="small muted">Milestone 5 adds no tables: the map shows places that have coordinates, which milestone 1 already stores.</p>
+
+<!-- ============================================================ -->
+<h2 id="invariants">Invariants and what enforces them</h2>
+<p>Where possible the database or a type enforces a rule, so it doesn't depend on every handler remembering it.</p>
+<div class="scroll"><table>
+  <thead><tr><th>Rule</th><th>Enforced by</th></tr></thead>
+  <tbody>
+    <tr><td>One record per Maps place</td><td>Unique <code>maps_feature_id</code></td></tr>
+    <tr><td>A merge moves everything, or nothing happens</td><td>Every foreign key to <code>eats_places</code> is <code>ON DELETE RESTRICT</code> (SQLite already runs with <code>foreign_keys=ON</code>). The merge moves children and then deletes the duplicate, in one transaction. If a later milestone adds a table that references places and merge isn't taught about it, the delete fails and the transaction rolls back, so nothing is lost silently.</td></tr>
+    <tr><td>Merging dishes keeps every verdict</td><td>Dishes with the same <code>key</code> are combined by moving verdicts to the kept dish. Verdicts can't collide, because each visit belonged to only one of the two places.</td></tr>
+    <tr><td>One take, interest or verdict per person</td><td>Composite primary keys</td></tr>
+    <tr><td>Take text stays hidden until both have written one</td><td><code>takes.py</code> is the only code that reads take text. Pages get <code>TakeView(text=None)</code>, and search and the capture agent use the same <code>readable_takes(viewer)</code> SQL condition.</td></tr>
+    <tr><td>Nothing from an LLM becomes a record until confirmed</td><td>Agents only write <code>eats_proposals.output</code>. Records are created only by <code>proposals.confirm()</code>, in one transaction.</td></tr>
+    <tr><td>Proposal output is well-formed</td><td>Parsed with a <code>TypeAdapter[Capture]</code> on the way in and out, following the untyped-library rule</td></tr>
+    <tr><td>Coordinates are both set or both empty</td><td><code>CHECK ((latitude IS NULL) = (longitude IS NULL))</code></td></tr>
+  </tbody>
+</table></div>
+
+<!-- ============================================================ -->
+<h2 id="flows">How the main flows work</h2>
+
+<h3>Add a place from a Maps link <span class="tag m1">M1</span></h3>
+<p>Looking up the link shows you a result but saves nothing, so it runs inside the request rather than as a queued job, following the framework's rule. It takes around five seconds.</p>
+<div class="lanes">
+  <div class="who">You</div><div>On <code>/eats/places/new</code>, paste a Maps link into the link field.</div>
+  <div class="who">HTMX</div><div><code>hx-post /eats/places/lookup</code> on paste or change. The field shows "Opening Maps…" and is disabled meanwhile.</div>
+  <div class="who">Handler</div><div><code>maps.look_up(url)</code> calls <code>browser.fetch(url, wait_for_url=is_maps_place_url)</code>, then the pure <code>parse_maps_place(page.url, page.title)</code>.</div>
+  <div class="who">Handler</div><div>If the feature ID is already saved, return "You already have <a href="#">Katz's Delicatessen</a>". Otherwise return the form section with the name filled in, and the feature ID and pin as hidden fields, ready to edit.</div>
+  <div class="who">You</div><div>Adjust the name, add tags and "want to go", then <strong>Add place</strong> (a normal POST that redirects to the place page).</div>
+  <div class="who">If it fails</div><div>Search blocked, timeout, or no single place found: an inline note says so, and you can still type a name and save. The link is kept, and the place simply has no pin.</div>
+</div>
+<p class="small muted">The hidden fields come back from the client, so the POST rechecks them: <code>parse_maps_place</code> runs again on the submitted Maps URL, and the unique constraint catches a race. A tampered pin could only misplace our own place.</p>
+
+<h3>Browse and search <span class="tag m1">M1</span></h3>
+<p><code>GET /eats/places/?interest=both&amp;tag=georgian&amp;visited=no&amp;sort=waited&amp;q=dump</code>. Every filter is a query parameter, so each view has its own URL. <code>finding.find_places(session, viewer, Filters)</code> builds one <code>select</code> and returns <code>PlaceCard</code>s. The search box uses <code>hx-get</code> with a short delay and swaps in just the list. Quick pick, random pick, decision rounds and the map all start from the same <code>Filters</code>, so a filter works the same everywhere.</p>
+
+<h3>Log a visit and reveal takes <span class="tag m2">M2</span></h3>
+<div class="flow">
+  <span class="st">visit logged</span><span class="arr">→</span>
+  <span class="st">one take written</span><span class="arr">→</span>
+  <span class="st end">both written: revealed</span>
+</div>
+<p>While a visit is waiting on your take, it sits in the "How was it?" panel on <code>/eats/</code>. When you've written yours and the other person hasn't, you see their "would return" but not their text: "Samhita hasn't written hers yet." Takes stay editable after they're revealed.</p>
+<pre><code>def visible_takes(
+    takes: Sequence[Take], viewer_id: int, user_ids: frozenset[int]
+) -&gt; Sequence[TakeView]:
+    revealed = {take.user_id for take in takes} == user_ids
+    return [
+        TakeView(
+            user_id=take.user_id,
+            would_return=take.would_return,
+            text=take.text if revealed or take.user_id == viewer_id else None,
+        )
+        for take in takes
+    ]</code></pre>
+
+<h3>Decision rounds <span class="tag m3">M3</span></h3>
+<p>A round starts from the browse page's current filters. While a round is open, it shows on <code>/eats/</code> for both of you. While you wait for the other person, the round page checks back with HTMX every 10 seconds. <code>round_state(rule, candidates, answers, user_ids)</code> is pure and returns one of these:</p>
+<div class="flow">
+  <span class="tag m3">Both swipe</span>
+  <span class="st">deal ~8</span><span class="arr">→</span>
+  <span class="st">answering</span><span class="arr">→ both done →</span>
+  <span class="st">matches</span><span class="arr">→ tap one →</span>
+  <span class="st end">decided</span>
+</div>
+<div class="flow">
+  <span class="arr" style="padding-left:96px">no matches →</span>
+  <span class="st">no match</span><span class="arr">→ deal again (deal 2) →</span>
+  <span class="st">answering</span>
+</div>
+<div class="flow">
+  <span class="tag m3">Propose and pick</span>
+  <span class="st">shortlisting</span><span class="arr">→ starter submits 2–5 →</span>
+  <span class="st">picking</span><span class="arr">→ other picks →</span>
+  <span class="st end">decided</span>
+</div>
+<p>Your answers aren't shown to the other person until the round reaches matches or decided. A decided round offers <strong>Log a visit for today</strong>, an explicit POST that creates the visit, which then shows up in "How was it?". Quick pick weighs places both of you want ×2, then by <code>1 + days_waited / 30</code>, and picks three without repeats. The random source is passed in, so tests can fix it.</p>
+
+<h3>Capture with an LLM <span class="tag m4">M4</span></h3>
+<div class="flow">
+  <span class="st">queued</span><span class="arr">→ job starts →</span>
+  <span class="st">working</span><span class="arr">→</span>
+  <span class="st">ready</span><span class="arr">→ confirm (with edits) →</span>
+  <span class="st end">records created</span>
+</div>
+<div class="flow">
+  <span class="arr" style="padding-left:150px">↘ error, or still working after 10 min →</span>
+  <span class="st">failed</span><span class="arr">→ retry →</span><span class="st">queued</span>
+</div>
+<ol>
+  <li>Writing freeform text, adding by name, pasting a link or uploading a receipt creates an <code>eats_proposals</code> row (status <code>queued</code>), then calls <code>scheduler.enqueue(jobs.work_on_proposal, proposal_id)</code> and redirects to the inbox. A receipt image is stored on the row rather than in the job's arguments, so it can be cleared once read.</li>
+  <li>The job sets the proposal to <code>working</code> and runs <code>capture_agent</code> with <code>run_agent</code>. The agent has the framework's <code>web_toolset</code> and an Eats toolset: <code>find_saved_places(query)</code>, which returns IDs, names, tags and dish names but never takes, and <code>look_up_maps_link(url)</code>, which reuses <code>maps.look_up</code>. On success it stores the parsed <code>Capture</code> and clears the image. On failure it stores the error and keeps the image so a retry can use it.</li>
+  <li>The inbox checks back every few seconds while anything is queued or working. A proposal still <code>working</code> ten minutes after it started is shown as failed, because a restart might have killed its job and jobs aren't rerun.</li>
+  <li>Confirming renders the proposal as a prefilled form; submitting creates every record in one transaction and deletes the proposal.</li>
+</ol>
+<p>The agent's output type <code>Capture</code> refers to existing places by ID and to new ones by name, so the same type covers a single new place from a link and a whole evening from a text message.</p>
+
+<!-- ============================================================ -->
+<h2 id="routes">Routes</h2>
+<div class="scroll"><table>
+  <thead><tr><th></th><th>Route</th><th>What</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tag m1">M1</span></td><td><code>GET /eats/</code></td><td>Home: panels (How was it?, open rounds, inbox), then a quick look at the lists</td></tr>
+    <tr><td><span class="tag m1">M1</span></td><td><code>GET /eats/places/</code></td><td>Browse and search; filters are query parameters</td></tr>
+    <tr><td><span class="tag m1">M1</span></td><td><code>GET /eats/places/new</code> · <code>POST /eats/places/</code></td><td>Add a place</td></tr>
+    <tr><td><span class="tag m1">M1</span></td><td><code>POST /eats/places/lookup</code></td><td>HTMX fragment: read a Maps link</td></tr>
+    <tr><td><span class="tag m1">M1</span></td><td><code>GET /eats/places/{id}/</code></td><td>Place page</td></tr>
+    <tr><td><span class="tag m1">M1</span></td><td><code>GET|POST /eats/places/{id}/edit</code></td><td>Name, notes, tags</td></tr>
+    <tr><td><span class="tag m1">M1</span></td><td><code>POST /eats/places/{id}/interest</code></td><td>Toggle your "want to go"; HTMX swaps the button</td></tr>
+    <tr><td><span class="tag m1">M1</span></td><td><code>POST /eats/places/{id}/links</code> · <code>…/links/{link_id}/delete</code></td><td>Add or remove a link</td></tr>
+    <tr><td><span class="tag m1">M1</span></td><td><code>POST /eats/places/{id}/archive</code> · <code>…/unarchive</code></td><td></td></tr>
+    <tr><td><span class="tag m1">M1</span></td><td><code>GET|POST /eats/places/{id}/merge</code></td><td>Choose the duplicate, preview what moves, confirm</td></tr>
+    <tr><td><span class="tag m1">M1</span></td><td><code>GET /eats/tags/</code> · <code>/eats/tags/{name}/</code></td><td>Tag pages</td></tr>
+    <tr><td><span class="tag m2">M2</span></td><td><code>GET|POST /eats/places/{id}/visits/new</code></td><td>Log a visit with dishes and verdicts</td></tr>
+    <tr><td><span class="tag m2">M2</span></td><td><code>GET /eats/visits/{id}/</code> · <code>GET|POST …/edit</code></td><td>Visit page</td></tr>
+    <tr><td><span class="tag m2">M2</span></td><td><code>GET|POST /eats/visits/{id}/take</code></td><td>Write or edit your take</td></tr>
+    <tr><td><span class="tag m2">M2</span></td><td><code>POST /eats/places/{id}/dishes</code> · <code>…/dishes/{dish_id}/to-try</code></td><td>Dish board edits</td></tr>
+    <tr><td><span class="tag m3">M3</span></td><td><code>GET /eats/decide/</code> · <code>POST …/quick</code> · <code>POST …/random</code></td><td>Picks, from the browse filters</td></tr>
+    <tr><td><span class="tag m3">M3</span></td><td><code>POST /eats/rounds/</code> · <code>GET /eats/rounds/{id}/</code> · <code>POST …/answers</code> · <code>…/deal</code> · <code>…/decide</code> · <code>…/visit</code></td><td>Decision rounds</td></tr>
+    <tr><td><span class="tag m4">M4</span></td><td><code>GET /eats/inbox/</code> · <code>POST /eats/inbox/</code></td><td>Inbox, and the one capture box (text, name, link or photo)</td></tr>
+    <tr><td><span class="tag m4">M4</span></td><td><code>GET /eats/proposals/{id}/</code> · <code>POST …/confirm</code> · <code>…/discard</code> · <code>…/retry</code></td><td>Review a proposal</td></tr>
+    <tr><td><span class="tag m5">M5</span></td><td><code>GET /eats/map/</code></td><td>Map, with the browse filters</td></tr>
+  </tbody>
+</table></div>
+<p class="small muted">Page-level actions such as Edit, Add visit, Archive and Merge go in the shell's action bar through <code>PageAction</code>, as <code>docs/ui_design.md</code> asks. In-content controls stay in the content.</p>
+
+<!-- ============================================================ -->
+<h2 id="framework">Framework changes</h2>
+<div class="scroll"><table>
+  <thead><tr><th></th><th>Change</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tag m1">M1</span></td><td><code>BrowserService.fetch(url, *, wait_for_url: Callable[[str], bool] | None = None)</code>. After the page settles, check <code>location.href</code> until the condition holds or ~10 s pass, then take the snapshot either way.</td><td>Maps updates its URL after the text settles. The caller parses whatever URL it gets, so a timeout just means "no pin", not an error.</td></tr>
+    <tr><td><span class="tag m1">M1</span></td><td><code>{% block head %}</code> in <code>templates/base.html</code></td><td>So Eats pages can load <code>static/eats.css</code> without putting the magazine styles in the shared stylesheet</td></tr>
+    <tr><td><span class="tag m1">M1</span></td><td>Architecture doc: route examples, and Eats as the first full module</td><td>The doc still describes only the scaffold</td></tr>
+    <tr><td><span class="tag m4">M4</span></td><td>Nothing new expected</td><td><code>enqueue</code>, <code>run_agent</code>, <code>web_toolset</code> and image stripping are already there</td></tr>
+    <tr><td><span class="tag m5">M5</span></td><td>Vendor Leaflet into <code>static/js</code></td><td>As the spec says; OpenStreetMap tiles and attribution</td></tr>
+  </tbody>
+</table></div>
+<p>The reveal rule stays in Eats until Current Affairs needs it too, as the spec says.</p>
+
+<!-- ============================================================ -->
+<h2 id="milestones">Milestones</h2>
+<p>Each is one PR, usable on its own, in the spec's order.</p>
+
+<div class="card">
+  <h3 style="margin-top:0"><span class="tag m1">M1</span> Places and lists</h3>
+  <p><strong>Adds:</strong> places, links, tags, place-tags and interests; the browse, place, add, edit, merge and tag pages; the Maps lookup; <code>static/eats.css</code>; the two framework changes.</p>
+  <p><strong>Place page:</strong> the name as a big serif headline, tags as a kicker above it, a pull quote from the notes' first line, both people's interest, then links grouped by kind. Visits and the dish board slots arrive in M2.</p>
+  <p><strong>Done when:</strong> we can move our Google Maps saved lists in by pasting links, and find a place by tag, interest or name. Importing those lists automatically from Google Takeout stays in Later.</p>
+</div>
+<div class="card">
+  <h3 style="margin-top:0"><span class="tag m2">M2</span> Visits and dishes</h3>
+  <p><strong>Adds:</strong> visits, takes, dishes and verdicts; the visit form, with dishes added inline and a loved/fine/skip choice for each of you; the take form; the dish board; "How was it?"; takes and dishes in search; "visited" and "last visit" filters and sort; merge extended to visits and dishes.</p>
+</div>
+<div class="card">
+  <h3 style="margin-top:0"><span class="tag m3">M3</span> Deciding</h3>
+  <p><strong>Adds:</strong> quick pick and random pick; rounds, candidates and answers; the round page with HTMX checking back; open rounds on <code>/eats/</code>; merge extended to round candidates.</p>
+</div>
+<div class="card">
+  <h3 style="margin-top:0"><span class="tag m4">M4</span> Capture with an LLM</h3>
+  <p><strong>Adds:</strong> proposals, the job, the agent and its toolset, the inbox and the review form. Ordered inside the milestone: proposals, the inbox and confirm (tested with <code>FunctionModel</code>); then freeform text; then add by name and link reading; then receipts. The duplicate check comes from M1's unique feature ID plus <code>find_saved_places</code>.</p>
+</div>
+<div class="card">
+  <h3 style="margin-top:0"><span class="tag m5">M5</span> Map</h3>
+  <p><strong>Adds:</strong> <code>/eats/map/</code> with Leaflet, using the browse filters; a "places without a pin" list linking to each place's edit page. With decision 1 this is a small milestone.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="testing">Testing</h2>
+<div class="scroll"><table>
+  <thead><tr><th>Kind</th><th>What</th></tr></thead>
+  <tbody>
+    <tr><td>Unit (pure)</td><td><code>link_kind</code>; <code>parse_maps_place</code> on real URLs captured from Maps, including the ones you send; <code>dish_key</code>; <code>visible_takes</code>; <code>dish_board</code>; <code>quick_pick</code>/<code>random_pick</code> with a seeded <code>Random</code>; <code>round_state</code> for every rule and transition; <code>waited</code></td></tr>
+    <tr><td>Integration (app + real SQLite)</td><td>Through the <code>client</code> fixture with two users: add, edit, archive; interest seen by the other user; filters and sort; search never returns the other person's unrevealed take; merge moves every kind of child and leaves nothing pointing at the deleted place; a duplicate feature ID is refused; the reveal flow end to end; a full round</td></tr>
+    <tr><td>Browser</td><td>The local fixture server gets a fake Maps page that changes its own URL to a <code>/maps/place/…!1s…!3d…!4d…</code> address after a delay. This tests <code>wait_for_url</code> and the lookup handler without calling Google.</td></tr>
+    <tr><td>LLM</td><td><code>work_on_proposal</code> called directly with <code>FunctionModel</code>: success, failure, then retry; image cleared; confirm creates the records in one transaction; the toolset never returns take text</td></tr>
+    <tr><td>By hand, once</td><td>Real share links from both phones, resolved in the real browser before M1 merges, which answers the spec's open question</td></tr>
+  </tbody>
+</table></div>
+
+<!-- ============================================================ -->
+<h2 id="spec">Spec changes this implies</h2>
+<p>If you agree with the decisions, I'll update <code>docs/modules/eats.md</code> in the M1 PR:</p>
+<ul>
+  <li><strong>Maps and Location:</strong> coordinates and identity come from the resolved Maps URL. Remove Nominatim and the address.</li>
+  <li><strong>Build Order M1:</strong> "fill in the place's name and coordinates" instead of "name and address".</li>
+  <li><strong>FR-M2.3:</strong> "Adding a place whose Google Maps link resolves to a place we already have leads to that place instead of creating a duplicate."</li>
+  <li><strong>FR-M6.2:</strong> define time waited.</li>
+  <li><strong>FR-M6.3:</strong> "Search covers…" instead of "Full-text search covers…".</li>
+  <li><strong>Open questions:</strong> record the probe's findings. The <code>maps.app.goo.gl</code> question stays open until your links are tested.</li>
+</ul>
+
+<h3>Still unsure</h3>
+<ul>
+  <li>How phone share links resolve, so please send a few.</li>
+  <li>Whether Maps behaves differently from a residential IP than from this workspace. The home server is where it will run.</li>
+  <li>Whether a place without a Maps link (a food truck, say) needs a way to set its pin by hand. I'd leave that out until it comes up.</li>
+</ul>
+
+</main>
+</body>
+</html>
